@@ -9,7 +9,7 @@ function sessionConfig() {
   return {
     password: process.env["SESSION_SECRET"]!,
     name: "radium-account",
-    maxAge: 60 * 60 * 24 * 365,
+    // No maxAge: session cookie, cleared when the browser closes.
     cookie: { httpOnly: true, secure: true, sameSite: "none" as const, path: "/" },
   };
 }
