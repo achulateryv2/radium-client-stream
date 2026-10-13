@@ -2,6 +2,7 @@
  * Music tab: SoundCloud-style search page. Songs play inside Radium through
  * SoundCloud's official player (kept mounted so playback survives tab switches).
  */
+import { track } from "@/lib/track";
 import { useEffect, useRef, useState } from "react";
 import { BadgeCheck, Copy, Heart, MessageSquare, MoreHorizontal, Pause, Play, Repeat, Repeat1, Repeat2, Search, Share } from "lucide-react";
 
@@ -83,6 +84,7 @@ export function MusicTab() {
 
   const pick = (t: Track) => {
     if (current?.id === t.id && widget.current) { playing ? widget.current.pause() : widget.current.play(); return; }
+    track("music", `${t.title} — ${t.artist}`, { trackId: t.id, url: t.url, artist: t.artist, genre: t.genre ?? null });
     setProgress(0); setCurrent(t);
   };
   const nextLoop = () => setLoop((l) => (l === "off" ? "all" : l === "all" ? "one" : "off"));
@@ -102,7 +104,7 @@ export function MusicTab() {
           {["Home", "Feed", "Library"].map((n) => <button key={n} onClick={() => n === "Home" && run("", "Trending on SoundCloud")}>{n}</button>)}
         </nav>
         <form className="flex min-w-[180px] flex-1 items-center rounded px-3 py-2" style={{ background: "var(--rd-surface)" }}
-          onSubmit={(e) => { e.preventDefault(); const q = query.trim(); if (q) void run(q, `Search results for “${q}”`); }}>
+          onSubmit={(e) => { e.preventDefault(); const q = query.trim(); if (q) { track("search", q, { source: "music" }); void run(q, `Search results for “${q}”`); } }}>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search SoundCloud" className="flex-1 bg-transparent text-sm outline-none" />
           <button type="submit" aria-label="Search"><Search size={18} style={{ color: "var(--rd-accent)" }} /></button>
         </form>

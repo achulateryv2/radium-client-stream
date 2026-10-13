@@ -16,6 +16,8 @@ import {
   themeToCss,
   type Theme,
 } from "./themes";
+import { clearMyHistory, saveSettings } from "./account.functions";
+import { track } from "./track";
 
 export type Settings = {
   stealth: boolean;
@@ -47,9 +49,28 @@ type Ctx = {
   history: { url: string; at: number }[];
   pushHistory: (url: string) => void;
   clearHistory: () => void;
+  hydrate: (remote: Record<string, unknown>) => void;
 };
 
 const RadiumContext = createContext<Ctx | null>(null);
+
+let syncTimer: ReturnType<typeof setTimeout> | undefined;
+function syncRemote(payload: { settings?: Settings; theme?: Theme }) {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    try {
+      const current = {
+        settings: JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) ?? "null"),
+        theme: JSON.parse(localStorage.getItem(STORAGE_KEYS.active) ?? "null"),
+        ...payload,
+      };
+      void saveSettings({ data: current }).catch(() => {});
+      track("settings", payload.theme ? `Theme: ${payload.theme.name}` : "Settings updated", current);
+    } catch {
+      /* ignore */
+    }
+  }, 800);
+}
 
 export function RadiumProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(RADIUM_DARK);
@@ -83,6 +104,7 @@ export function RadiumProvider({ children }: { children: ReactNode }) {
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
     localStorage.setItem(STORAGE_KEYS.active, JSON.stringify(t));
+    syncRemote({ theme: t });
   }, []);
 
   const toggleMode = useCallback(() => {
@@ -90,6 +112,7 @@ export function RadiumProvider({ children }: { children: ReactNode }) {
       const base = prev.mode === "dark" ? RADIUM_LIGHT : RADIUM_DARK;
       const next = { ...base, accent: prev.accent, accentAlt: prev.accentAlt };
       localStorage.setItem(STORAGE_KEYS.active, JSON.stringify(next));
+      syncRemote({ theme: next });
       return next;
     });
   }, []);
@@ -114,11 +137,13 @@ export function RadiumProvider({ children }: { children: ReactNode }) {
     setSettings((prev) => {
       const next = { ...prev, ...patch };
       localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(next));
+      syncRemote({ settings: next });
       return next;
     });
   }, []);
 
   const pushHistory = useCallback((url: string) => {
+    track("search", url, { source: "browser" });
     setHistory((prev) => {
       const next = [{ url, at: Date.now() }, ...prev.filter((h) => h.url !== url)].slice(0, 30);
       localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(next));
@@ -129,6 +154,20 @@ export function RadiumProvider({ children }: { children: ReactNode }) {
   const clearHistory = useCallback(() => {
     setHistory([]);
     localStorage.removeItem(STORAGE_KEYS.history);
+    void clearMyHistory({ data: { kind: "search" } }).catch(() => {});
+  }, []);
+
+  const hydrate = useCallback((remote: Record<string, unknown>) => {
+    const r = remote as { settings?: Settings | null; theme?: Theme | null };
+    if (r.settings) {
+      const next = { ...DEFAULT_SETTINGS, ...r.settings };
+      setSettings(next);
+      localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(next));
+    }
+    if (r.theme && r.theme.mode) {
+      setThemeState(r.theme);
+      localStorage.setItem(STORAGE_KEYS.active, JSON.stringify(r.theme));
+    }
   }, []);
 
   const value = useMemo(
@@ -144,6 +183,7 @@ export function RadiumProvider({ children }: { children: ReactNode }) {
       history,
       pushHistory,
       clearHistory,
+      hydrate,
     }),
     [
       theme,
@@ -157,6 +197,7 @@ export function RadiumProvider({ children }: { children: ReactNode }) {
       history,
       pushHistory,
       clearHistory,
+      hydrate,
     ],
   );
 

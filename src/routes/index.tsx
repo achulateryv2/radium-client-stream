@@ -38,6 +38,10 @@ import {
   videoPlayerUrl,
 } from "@/lib/radium";
 import { pipedMore, pipedSearch, pipedStreams, type PipedItem, type PipedVideo } from "@/lib/piped";
+import { track } from "@/lib/track";
+import { useAccount } from "@/lib/account";
+import { AuthScreen } from "@/components/auth-screen";
+import { AdminTab } from "@/components/admin-tab";
 import { PRESET_THEMES, THEME_FIELDS, type Theme } from "@/lib/themes";
 
 export const Route = createFileRoute("/")({
@@ -61,11 +65,27 @@ export const Route = createFileRoute("/")({
   component: RadiumApp,
 });
 
-type Tab = "browser" | "youtube" | "music" | "settings";
+type Tab = "browser" | "youtube" | "music" | "settings" | "admin";
 
 function RadiumApp() {
+  const account = useAccount();
+  const { hydrate } = useRadium();
+  const userId = account.user?.id;
+  useEffect(() => {
+    if (account.user) hydrate(account.user.settings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+  if (account.loading) {
+    return <div className="flex h-screen items-center justify-center font-mono text-xs tracking-[0.3em]" style={{ background: "var(--rd-bg)", color: "var(--rd-muted)" }}>LOADING…</div>;
+  }
+  if (!account.user) return <AuthScreen />;
+  return <ClientShell />;
+}
+
+function ClientShell() {
   const [tab, setTab] = useState<Tab>("browser");
   const { theme, toggleMode, settings } = useRadium();
+  const { user, signOut } = useAccount();
 
   return (
     <div
@@ -107,6 +127,12 @@ function RadiumApp() {
           >
             BY JAMES XIE
           </span>
+          <span className="font-mono text-[11px] tracking-[0.15em]" style={{ color: "var(--rd-text)" }}>
+            {user?.username}
+          </span>
+          <button onClick={() => void signOut()} className="rounded-sm px-2 py-1 font-mono text-[10px] tracking-[0.15em]" style={{ background: "var(--rd-button)", color: "var(--rd-accent)" }}>
+            SIGN OUT
+          </button>
         </div>
       </header>
 
@@ -117,6 +143,7 @@ function RadiumApp() {
             ["youtube", "YouTube"],
             ["music", "Music"],
             ["settings", "Settings"],
+            ...(user?.isAdmin ? ([["admin", "Admin"]] as [Tab, string][]) : []),
           ] as [Tab, string][]
         ).map(([id, label]) => (
           <button
@@ -131,7 +158,7 @@ function RadiumApp() {
               borderRightColor: tab === id ? "var(--rd-line)" : "transparent",
             }}
           >
-            {id === "browser" ? <ShieldCheck size={13} className="text-client-signal" /> : id === "youtube" ? <Youtube size={14} className="text-client-signal" /> : id === "music" ? <Music size={13} className="text-client-signal" /> : <Settings size={13} className="text-client-signal" />}
+            {id === "browser" ? <ShieldCheck size={13} className="text-client-signal" /> : id === "youtube" ? <Youtube size={14} className="text-client-signal" /> : id === "music" ? <Music size={13} className="text-client-signal" /> : id === "admin" ? <LockKeyhole size={13} className="text-client-signal" /> : <Settings size={13} className="text-client-signal" />}
             {label}
           </button>
         ))}
@@ -144,6 +171,7 @@ function RadiumApp() {
           <MusicTab />
         </div>
         {tab === "settings" && <SettingsTab />}
+        {tab === "admin" && user?.isAdmin && <AdminTab />}
       </div>
 
       <footer
@@ -503,6 +531,7 @@ function PipedView({ options }: { options: React.ReactNode }) {
 
   const open = async (id: string) => {
     const card = results.find((x) => x.videoId === id);
+    track("video", card?.title ?? id, { videoId: id, url: `https://youtube.com/watch?v=${id}` });
     const fallback: PipedVideo = {
       videoId: id,
       title: card?.title ?? "Video",
@@ -547,6 +576,7 @@ function PipedView({ options }: { options: React.ReactNode }) {
     e.preventDefault();
     const raw = query.trim();
     if (!raw) return;
+    track("search", raw, { source: "youtube" });
     const id = getYouTubeVideoId(raw) ?? (/^[\w-]{11}$/.test(raw) ? raw : null);
     if (id) return void open(id);
     await runSearch(raw, `Results for “${raw}”`);
@@ -733,6 +763,7 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
 
   const openVideo = (v: InvidiousVideo) => {
     if (!v.videoId) return;
+    track("video", v.title ?? v.videoId, { videoId: v.videoId, url: `https://youtube.com/watch?v=${v.videoId}` });
     setSelected(v);
     setComments([]);
     setPlayerState("loading");
@@ -775,6 +806,7 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
     e.preventDefault();
     const raw = query.trim();
     if (!raw) return;
+    track("search", raw, { source: "youtube" });
     const videoId = getYouTubeVideoId(raw);
     if (videoId) {
       openVideo({
