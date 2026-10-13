@@ -106,7 +106,7 @@ export function AdminTab() {
                 <li key={a.id} className="flex items-start justify-between gap-4 py-2 text-sm" style={{ borderBottom: "1px solid var(--rd-line)" }}>
                   <span className="min-w-0 break-all">
                     {a.value}
-                    {typeof a.detail.source === "string" && <span className="ml-2 font-mono text-[10px]" style={{ color: "var(--rd-muted)" }}>{a.detail.source}</span>}
+                    {typeof a.detail["source"] === "string" && <span className="ml-2 font-mono text-[10px]" style={{ color: "var(--rd-muted)" }}>{a.detail["source"]}</span>}
                     {a.hidden && <span className="ml-2 font-mono text-[10px]" style={{ color: "var(--rd-accent)" }}>DELETED BY USER</span>}
                   </span>
                   <span className="shrink-0 font-mono text-[10px]" style={{ color: "var(--rd-muted)" }}>{fmt(a.created_at)}</span>
