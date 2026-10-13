@@ -27,7 +27,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     try {
       const r = await getMe();
       setUser(r.user);
-      setBanned(Boolean("banned" in r && r.banned));
+      setBanned(r.banned);
     } catch {
       setUser(null);
     } finally {

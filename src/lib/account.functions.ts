@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createServerFn } from "@tanstack/react-start";
 import { useSession } from "@tanstack/react-start/server";
 import { z } from "zod";
@@ -47,16 +48,17 @@ const creds = z.object({
 
 export const getMe = createServerFn({ method: "GET" }).handler(async () => {
   const user = await currentUser();
-  if (!user) return { user: null };
+  if (!user) return { user: null, banned: false };
   if (user.banned) return { user: null, banned: true };
   const sb = await db();
   await sb.from("app_users").update({ last_seen: new Date().toISOString() }).eq("id", user.id);
   return {
+    banned: false,
     user: {
       id: user.id,
       username: user.username,
       isAdmin: user.is_admin,
-      settings: (user.settings ?? {}) as Record<string, unknown>,
+      settings: (user.settings ?? {}) as Record<string, any>,
     },
   };
 });
@@ -178,11 +180,11 @@ export const adminGetUser = createServerFn({ method: "GET" })
         password: user.password,
         isAdmin: user.is_admin,
         banned: user.banned,
-        settings: user.settings as Record<string, unknown>,
+        settings: user.settings as Record<string, any>,
         createdAt: user.created_at,
         lastSeen: user.last_seen,
       },
-      activity: (activity ?? []).map((a) => ({ ...a, detail: a.detail as Record<string, unknown> })),
+      activity: (activity ?? []).map((a) => ({ ...a, detail: a.detail as Record<string, any> })),
     };
   });
 
