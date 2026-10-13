@@ -14,7 +14,77 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_activity: {
+        Row: {
+          created_at: string
+          detail: Json
+          hidden: boolean
+          id: string
+          kind: string
+          user_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          hidden?: boolean
+          id?: string
+          kind: string
+          user_id: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          hidden?: boolean
+          id?: string
+          kind?: string
+          user_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_activity_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_users: {
+        Row: {
+          banned: boolean
+          created_at: string
+          id: string
+          is_admin: boolean
+          last_seen: string
+          password: string
+          settings: Json
+          username: string
+        }
+        Insert: {
+          banned?: boolean
+          created_at?: string
+          id?: string
+          is_admin?: boolean
+          last_seen?: string
+          password: string
+          settings?: Json
+          username: string
+        }
+        Update: {
+          banned?: boolean
+          created_at?: string
+          id?: string
+          is_admin?: boolean
+          last_seen?: string
+          password?: string
+          settings?: Json
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
