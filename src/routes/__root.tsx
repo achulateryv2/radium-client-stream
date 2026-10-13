@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { RadiumProvider } from "../lib/radium";
+import { AccountProvider } from "../lib/account";
 
 function NotFoundComponent() {
   return (
@@ -130,10 +131,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AccountProvider>
       <RadiumProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
       </RadiumProvider>
+      </AccountProvider>
     </QueryClientProvider>
   );
 }
