@@ -5,5 +5,8 @@
 - [x] Handle Piped API responses safely when launched from the Home Screen
 - [x] Add a stable Home Screen launch URL and prevent stale Piped API responses
 - [x] Restore Invidious result thumbnails when public image links fail
-- [ ] Replace Music with real SoundCloud discovery, search and on-demand playback
-- [ ] Verify Music controls, appearance and failure states
+- [x] Replace Music with real SoundCloud discovery, search and on-demand playback
+- [x] Verify Music controls, appearance and failure states
+- [ ] Restore YouTube's Invidious/Piped search with a browser-style opening screen
+- [ ] Remove provider connection messages and accelerate video/thumbnail preloading
+- [ ] Verify YouTube search, provider switching and video opening
