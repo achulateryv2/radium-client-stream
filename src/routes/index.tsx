@@ -39,6 +39,7 @@ import {
 } from "@/lib/radium";
 import { pipedMore, pipedSearch, pipedStreams, type PipedItem, type PipedVideo } from "@/lib/piped";
 import { track } from "@/lib/track";
+import { firstUsable, preloadVideo } from "@/lib/video-loading";
 import { useAccount } from "@/lib/account";
 import { AuthScreen } from "@/components/auth-screen";
 import { AdminTab } from "@/components/admin-tab";
@@ -379,180 +380,25 @@ function StartScreen({
 }
 
 type Provider = "invidious" | "piped";
-export const _legacyViews = { PipedView, InvidiousView, OptionsMenu };
-
-const DEFAULT_PROXY_GATEWAY = "/api/public/p?u={url}";
-const GATEWAY_KEY = "radium-proxy-gateway";
-
-function normalizeDestination(raw: string): string | null {
-  const t = raw.trim();
-  if (!t) return null;
-  const withScheme = /^https?:\/\//i.test(t) ? t : `https://${t}`;
-  try {
-    return new URL(withScheme).toString();
-  } catch {
-    return null;
-  }
-}
-
-function buildGatewayUrl(gateway: string, destination: string): string {
-  const encoded = encodeURIComponent(destination);
-  return gateway.includes("{url}") ? gateway.replace("{url}", encoded) : gateway + encoded;
-}
-
 function YouTubeTab() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [customUrl, setCustomUrl] = useState("");
-  const [active, setActive] = useState<{ label: string; url: string } | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [gateway, setGateway] = useState(DEFAULT_PROXY_GATEWAY);
-  const [draftGateway, setDraftGateway] = useState(gateway);
+  const [provider, setProvider] = useState<Provider>("invidious");
+  const options = <OptionsMenu provider={provider} onPick={setProvider} />;
+  return provider === "piped" ? <PipedView options={options} /> : <InvidiousView options={options} />;
+}
 
-  useEffect(() => {
-    const saved = localStorage.getItem(GATEWAY_KEY);
-    if (saved) setGateway(saved);
-  }, []);
-
-  const launch = (label: string, raw: string) => {
-    const dest = normalizeDestination(raw);
-    if (!dest) return;
-    track("video", label, { url: dest, source: "proxy-dashboard" });
-    setActive({ label, url: buildGatewayUrl(gateway, dest) });
-  };
-
-  const saveGateway = () => {
-    const g = draftGateway.trim() || DEFAULT_PROXY_GATEWAY;
-    setGateway(g);
-    localStorage.setItem(GATEWAY_KEY, g);
-    track("settings", "proxy gateway", { gateway: g });
-    setSettingsOpen(false);
-  };
-
+function VideoStartScreen({ onSearch }: { onSearch: () => void }) {
   return (
-    <div className="flex h-full min-h-0">
-      {/* Collapsible side menu */}
-      <aside
-        className="flex shrink-0 flex-col gap-1 overflow-y-auto border-r py-3 transition-all duration-200"
-        style={{
-          width: collapsed ? 48 : 240,
-          borderColor: "var(--rd-line)",
-          background: "var(--rd-surface)",
-          paddingLeft: collapsed ? 6 : 12,
-          paddingRight: collapsed ? 6 : 12,
-        }}
-      >
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? "Expand menu" : "Collapse menu"}
-          className="mb-2 flex items-center gap-2 rounded-md px-2 py-2 text-xs transition-colors hover:opacity-80"
-          style={{ color: "var(--rd-muted)" }}
-        >
-          {collapsed ? <ArrowRight size={14} /> : <ArrowLeft size={14} />}
-          {!collapsed && <span className="font-mono tracking-[0.14em]">PROXY MENU</span>}
-        </button>
-
-        <button
-          onClick={() => launch("YouTube", "https://www.youtube.com")}
-          className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm font-medium transition-all hover:translate-x-0.5"
-          style={{ background: "var(--rd-accent)", color: "var(--rd-bg)" }}
-        >
-          <Youtube size={16} className="shrink-0" />
-          {!collapsed && "YouTube"}
-        </button>
-
-        {!collapsed && (
-          <form
-            className="mt-2 flex flex-col gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              launch(customUrl.trim() || "Custom", customUrl);
-            }}
-          >
-            <label className="font-mono text-[10px] tracking-[0.14em]" style={{ color: "var(--rd-muted)" }}>
-              CUSTOM URL
-            </label>
-            <input
-              value={customUrl}
-              onChange={(e) => setCustomUrl(e.target.value)}
-              placeholder="example.com"
-              aria-label="Custom URL"
-              className="w-full rounded-md bg-transparent px-3 py-2 font-mono text-sm outline-none"
-              style={{ background: "var(--rd-search)", border: "1px solid var(--rd-line)", color: "var(--rd-search-text)" }}
-            />
-            <button
-              type="submit"
-              className="rounded-md px-3 py-2 text-xs font-medium transition-opacity hover:opacity-80"
-              style={btnStyle}
-            >
-              Launch
-            </button>
-          </form>
-        )}
-
-        <div className="mt-auto">
-          <button
-            onClick={() => { setDraftGateway(gateway); setSettingsOpen(true); }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs transition-opacity hover:opacity-80"
-            style={{ color: "var(--rd-muted)" }}
-          >
-            <Settings size={14} className="shrink-0" />
-            {!collapsed && "Settings"}
-          </button>
+    <div className="radium-grid video-start h-full overflow-auto px-4 py-10">
+      <div className="relative mx-auto max-w-[680px] pt-[2vh] sm:pt-[4vh]">
+        <div className="video-start-outline absolute inset-0 translate-x-3 translate-y-3 rounded-sm" aria-hidden />
+        <div className="video-start-panel relative px-6 py-10 text-center sm:px-12 sm:py-12">
+          <div className="mb-6 flex justify-center"><RadiumMark size={64} /></div>
+          <p className="video-start-muted font-mono text-xs">RADIUM CLIENT · YOUTUBE</p>
+          <h1 className="mx-auto mt-4 max-w-xl text-4xl font-bold leading-[1.02] sm:text-6xl">Find your<br />next video.</h1>
+          <p className="video-start-muted mx-auto mt-6 max-w-md text-sm">Search YouTube or paste a video link.</p>
+          <Button onClick={onSearch} className="video-search-button mt-8 px-8"><Search size={15} /> Search YouTube</Button>
         </div>
-      </aside>
-
-      {/* Proxied viewport */}
-      <div className="min-w-0 flex-1">
-        {active ? (
-          <iframe
-            key={active.url}
-            src={active.url}
-            title={active.label}
-            className="h-full w-full"
-            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-            <Youtube size={32} style={{ color: "var(--rd-accent)" }} />
-            <p className="font-mono text-xs tracking-[0.12em]" style={{ color: "var(--rd-muted)" }}>
-              PICK A SITE FROM THE MENU TO LOAD IT THROUGH THE PROXY GATEWAY
-            </p>
-          </div>
-        )}
       </div>
-
-      {/* Settings modal */}
-      {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "color-mix(in srgb, var(--rd-bg) 70%, transparent)" }}>
-          <div className="w-full max-w-md rounded-lg p-5" style={{ background: "var(--rd-surface)", border: "1px solid var(--rd-line)" }}>
-            <h3 className="mb-3 font-mono text-xs tracking-[0.16em]" style={{ color: "var(--rd-text)" }}>PROXY GATEWAY</h3>
-            <input
-              value={draftGateway}
-              onChange={(e) => setDraftGateway(e.target.value)}
-              aria-label="Proxy gateway URL"
-              className="mb-3 w-full rounded-md bg-transparent px-3 py-2 font-mono text-sm outline-none"
-              style={{ background: "var(--rd-search)", border: "1px solid var(--rd-line)", color: "var(--rd-search-text)" }}
-            />
-            <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--rd-muted)" }}>
-              If YouTube shows "Not connected to the internet" or "Verify you are not a bot", the gateway's
-              hosting IP is flagged by Google. Update the gateway to a clean, non-datacenter IP or an edge
-              worker, then reload the site.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setDraftGateway(DEFAULT_PROXY_GATEWAY)} className="rounded-md px-3 py-2 text-xs" style={btnStyle}>
-                Reset
-              </button>
-              <button onClick={() => setSettingsOpen(false)} className="rounded-md px-3 py-2 text-xs" style={btnStyle}>
-                Cancel
-              </button>
-              <button onClick={saveGateway} className="rounded-md px-3 py-2 text-xs font-medium" style={{ background: "var(--rd-accent)", color: "var(--rd-bg)" }}>
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -564,33 +410,12 @@ const btnStyle = {
 } as const;
 
 function OptionsMenu({ provider, onPick }: { provider: Provider; onPick: (p: Provider) => void }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="rounded-md px-4 py-2 text-xs" style={btnStyle}>
-        Options · {provider === "piped" ? "Piped" : "Invidious"}
-      </button>
-      {open && (
-        <div
-          className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-md text-xs"
-          style={{ background: "var(--rd-surface)", border: "1px solid var(--rd-line)" }}
-        >
-          {(["piped", "invidious"] as Provider[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => {
-                onPick(p);
-                setOpen(false);
-              }}
-              className="block w-full px-3 py-2 text-left"
-              style={{ color: p === provider ? "var(--rd-accent)" : "var(--rd-text)" }}
-            >
-              Connect to {p === "piped" ? "Piped" : "Invidious"}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <select aria-label="Video provider" value={provider} onChange={(e) => onPick(e.target.value as Provider)}
+      className="video-provider h-9 max-w-full rounded-sm px-2 font-mono text-xs">
+      <option value="invidious">Invidious</option>
+      <option value="piped">Piped</option>
+    </select>
   );
 }
 
@@ -630,14 +455,16 @@ const pipedToInv = (v: PipedItem): InvidiousVideo => ({
   publishedText: v.uploaded, lengthSeconds: v.duration, liveNow: false, thumbnail: v.thumbnail, description: null,
 });
 const invToPiped = (v: InvidiousVideo): PipedItem => ({
-  videoId: v.videoId!, title: v.title, author: v.author, views: v.viewCount, uploaded: v.publishedText,
+  videoId: v.videoId ?? "", title: v.title, author: v.author, views: v.viewCount, uploaded: v.publishedText,
   duration: v.lengthSeconds, thumbnail: v.thumbnail,
 });
 
 function PipedView({ options }: { options: React.ReactNode }) {
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("Finding a working Piped server…");
-  const [instance, setInstance] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [started, setStarted] = useState(false);
+  const activeId = useRef<string | null>(null);
   const [results, setResults] = useState<PipedItem[]>([]);
   const [video, setVideo] = useState<PipedVideo | null>(null);
   const [quality, setQuality] = useState<string>("");
@@ -650,27 +477,25 @@ function PipedView({ options }: { options: React.ReactNode }) {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const runSearch = useCallback(async (q: string, label: string) => {
+    setStarted(true);
+    activeId.current = null;
     setBusy(true);
+    setResults([]);
     setVideo(null);
     setStatus(`Loading ${label}…`);
     setTerm(q);
     setPage(1);
     setNext(null);
-    const r = await pipedSearch(q);
-    if (r.success && r.results.length) {
-      setSrc("piped");
-      setInstance(r.instance);
-      setNext(r.nextpage ?? null);
+    const r = await firstUsable([
+      pipedSearch(q).then((r) => r.success ? { source: "piped" as const, results: r.results, next: r.nextpage ?? null } : { source: "piped" as const, results: [], next: null }),
+      searchVideos(q, { region: "SG" }).then((r) => ({ source: "invidious" as const, results: r.success ? r.results.filter((v) => v.videoId).map(invToPiped) : [], next: null })),
+    ], (r) => r.results.length > 0);
+    if (r) {
+      setSrc(r.source);
+      setNext(r.next);
       setResults(r.results);
       setStatus(label);
-    } else {
-      const alt = await searchVideos(q, { region: "SG" });
-      if (alt.success) {
-        setSrc("invidious");
-        setResults(alt.results.filter((v) => v.videoId).map(invToPiped));
-        setStatus(`${label} (switched to Invidious)`);
-      } else setStatus(r.success ? "No results" : r.error);
-    }
+    } else setStatus("No videos found. Try another search.");
     setBusy(false);
   }, []);
 
@@ -692,9 +517,6 @@ function PipedView({ options }: { options: React.ReactNode }) {
   };
   const sentinel = useBottom(() => void loadMore());
 
-  useEffect(() => {
-    void runSearch("gaming", "Trending gaming");
-  }, [runSearch]);
 
   const open = async (id: string) => {
     const card = results.find((x) => x.videoId === id);
@@ -710,20 +532,15 @@ function PipedView({ options }: { options: React.ReactNode }) {
       hls: null,
       streams: [],
     };
-    setBusy(true);
-    setStatus("Loading streams…");
-    const r = await pipedStreams(id);
-    setBusy(false);
-    if (!r.success || !r.video.streams.length) {
-      setVideo(fallback);
-      setQuality(EMBED);
-      setStatus(`${fallback.title} · backup player (Piped streams unavailable)`);
-      return;
-    }
-    setInstance(r.instance);
-    setVideo(r.video);
-    setQuality(r.video.streams[0]?.url ?? EMBED);
-    setStatus(r.video.title);
+    setStarted(true);
+    activeId.current = id;
+    setVideo(fallback);
+    setQuality(EMBED);
+    setStatus(fallback.title);
+    const streams = await preloadVideo(id);
+    if (activeId.current !== id || !streams?.length) return;
+    setVideo({ ...fallback, streams });
+    setQuality(streams[0]?.url ?? EMBED);
   };
 
   const onStreamError = () => {
@@ -735,7 +552,7 @@ function PipedView({ options }: { options: React.ReactNode }) {
       setStatus(`Stream failed — trying ${next.quality}`);
     } else {
       setQuality(EMBED);
-      setStatus(`${video.title} · switched to backup player`);
+      setStatus(video.title);
     }
   };
 
@@ -758,38 +575,39 @@ function PipedView({ options }: { options: React.ReactNode }) {
             style={{ background: "var(--rd-search)", border: "1px solid var(--rd-line)" }}
           >
             <input
+              ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search via Piped or paste a video link"
-              aria-label="Piped search"
+              placeholder="Search YouTube or paste a video link"
+              aria-label="YouTube search"
               className="w-full bg-transparent font-mono text-sm outline-none"
               style={{ color: "var(--rd-search-text)" }}
             />
-            <button
+            <Button
               type="submit"
               disabled={busy}
               className="shrink-0 rounded px-3 py-1 text-xs font-medium disabled:opacity-60"
               style={{ background: "var(--rd-accent)", color: "var(--rd-bg)" }}
             >
               Search
-            </button>
+            </Button>
           </div>
         </form>
         {options}
         {video && (
-          <button onClick={() => setVideo(null)} className="rounded-md px-4 py-2 text-xs" style={btnStyle}>
+          <button onClick={() => { activeId.current = null; setVideo(null); }} className="rounded-md px-4 py-2 text-xs" style={btnStyle}>
             ← Back
           </button>
         )}
       </div>
-      <div
+      {started && <div
         className="flex items-center justify-between gap-3 px-4 py-1.5 font-mono text-[11px] tracking-[0.12em]"
         style={{ borderTop: "1px solid var(--rd-line)", borderBottom: "1px solid var(--rd-line)", color: "var(--rd-muted)" }}
       >
         <span className="truncate">{status}</span>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {video ? (
+      </div>}
+      <div className={`min-h-0 flex-1 overflow-y-auto ${started ? "p-3" : ""}`}>
+        {!started ? <VideoStartScreen onSearch={() => searchRef.current?.focus()} /> : video ? (
           <div className="space-y-3">
             {quality === EMBED ? (
               <iframe
@@ -806,7 +624,7 @@ function PipedView({ options }: { options: React.ReactNode }) {
               <video
                 key={quality}
                 src={quality ? `/api/stream?url=${encodeURIComponent(quality)}` : undefined}
-                preload="metadata"
+                preload="auto"
                 poster={video.thumbnail}
                 controls
                 autoPlay
@@ -839,14 +657,16 @@ function PipedView({ options }: { options: React.ReactNode }) {
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {results.map((v) => (
+            {results.map((v, index) => (
               <button
                 key={v.videoId}
+                onPointerEnter={() => void preloadVideo(v.videoId)}
+                onFocus={() => void preloadVideo(v.videoId)}
                 onClick={() => void open(v.videoId)}
                 className="overflow-hidden rounded-lg text-left"
                 style={{ background: "var(--rd-button)", border: "1px solid var(--rd-line)" }}
               >
-                <VideoThumbnail videoId={v.videoId} />
+                <VideoThumbnail videoId={v.videoId} priority={index < 6} />
                 <div className="space-y-1 p-2">
                   <p className="line-clamp-2 text-xs font-medium" style={{ color: "var(--rd-text)" }}>{v.title}</p>
                   <p className="truncate font-mono text-[10px]" style={{ color: "var(--rd-muted)" }}>
@@ -858,7 +678,7 @@ function PipedView({ options }: { options: React.ReactNode }) {
             {(busy && !results.length) || loadingMore ? <SkeletonCards /> : null}
           </div>
         )}
-        {!video && <div ref={sentinel} className="h-8" />}
+        {started && !video && <div ref={sentinel} className="h-8" />}
       </div>
     </div>
   );
@@ -866,12 +686,14 @@ function PipedView({ options }: { options: React.ReactNode }) {
 
 function InvidiousView({ options }: { options: React.ReactNode }) {
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("Loading trending…");
+  const [status, setStatus] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [started, setStarted] = useState(false);
   const [results, setResults] = useState<InvidiousVideo[]>([]);
   const [selected, setSelected] = useState<InvidiousVideo | null>(null);
   const [comments, setComments] = useState<InvidiousComment[]>([]);
   const [busy, setBusy] = useState(false);
-  const [playerState, setPlayerState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [, setPlayerState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [term, setTerm] = useState("gaming");
   const [page, setPage] = useState(1);
   const [next, setNext] = useState<string | null>(null);
@@ -882,26 +704,24 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
   const [playMode, setPlayMode] = useState<"resolving" | "stream" | "embed">("resolving");
 
   const runSearch = useCallback(async (q: string, label: string) => {
+    setStarted(true);
     setBusy(true);
+    setResults([]);
     setSelected(null);
     setStatus(`Loading ${label}…`);
     setTerm(q);
     setPage(1);
     setNext(null);
-    const res = await searchVideos(q, { region: "SG" });
-    if (res.success && res.results.length) {
-      setSrc("invidious");
-      setResults(res.results);
+    const r = await firstUsable([
+      searchVideos(q, { region: "SG" }).then((r) => ({ source: "invidious" as const, results: r.success ? r.results : [], next: null })),
+      pipedSearch(q).then((r) => ({ source: "piped" as const, results: r.success ? r.results.map(pipedToInv) : [], next: r.success ? r.nextpage ?? null : null })),
+    ], (r) => r.results.length > 0);
+    if (r) {
+      setSrc(r.source);
+      setNext(r.next);
+      setResults(r.results);
       setStatus(label);
-    } else {
-      const alt = await pipedSearch(q);
-      if (alt.success) {
-        setSrc("piped");
-        setNext(alt.nextpage ?? null);
-        setResults(alt.results.map(pipedToInv));
-        setStatus(`${label} (switched to Piped)`);
-      } else setStatus(res.success ? "No results" : res.error);
-    }
+    } else setStatus("No videos found. Try another search.");
     setBusy(false);
   }, []);
 
@@ -923,9 +743,6 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
   };
   const sentinel = useBottom(() => void loadMore());
 
-  useEffect(() => {
-    void runSearch("gaming", "Trending gaming");
-  }, [runSearch]);
 
 
   const openVideo = (v: InvidiousVideo) => {
@@ -935,31 +752,22 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
     setComments([]);
     setPlayerState("loading");
     setStreamUrl(null);
-    setPlayMode("resolving");
+    setStarted(true);
+    setPlayMode("embed");
     setStatus(v.title || "Opening player…");
 
     const videoId = v.videoId;
-    const useStream = (url: string | undefined, label: string) => {
-      if (!url) return false;
-      setSelected((cur) => {
-        if (cur?.videoId === videoId) { setStreamUrl(url); setPlayMode("stream"); setStatus(label); }
-        return cur;
+    void getVideo(videoId).then((meta) => {
+      if (meta.success) setSelected((current) => current?.videoId === videoId ? { ...current, ...meta.video } : current);
+    });
+    void preloadVideo(videoId).then((streams) => {
+      const url = streams?.[0]?.url;
+      if (!url) return;
+      setSelected((current) => {
+        if (current?.videoId === videoId) { setStreamUrl(url); setPlayMode("stream"); }
+        return current;
       });
-      return true;
-    };
-    void (async () => {
-      const meta = await getVideo(videoId);
-      if (meta.success) {
-        setSelected((current) => current?.videoId === videoId ? { ...current, ...meta.video } : current);
-        if (useStream(meta.video.streams?.[0]?.url, "Streaming through Radium (Invidious)")) return;
-      }
-      const alt = await pipedStreams(videoId);
-      if (alt.success && useStream(alt.video.streams[0]?.url, "Streaming through Radium (Piped)")) return;
-      setSelected((cur) => {
-        if (cur?.videoId === videoId) { setPlayMode("embed"); setStatus("No proxied stream available — using backup player"); }
-        return cur;
-      });
-    })();
+    });
     void getComments(videoId).then((response) => {
       if (!response.success) return;
       setSelected((current) => {
@@ -1010,6 +818,7 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
               ▶
             </span>
             <input
+              ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search YouTube or paste a video link"
@@ -1018,14 +827,14 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
               className="w-full bg-transparent font-mono text-sm outline-none"
               style={{ color: "var(--rd-search-text)" }}
             />
-            <button
+            <Button
               type="submit"
               disabled={busy}
               className="shrink-0 rounded px-3 py-1 text-xs font-medium disabled:opacity-60"
               style={{ background: "var(--rd-accent)", color: "var(--rd-bg)" }}
             >
               Search
-            </button>
+            </Button>
           </div>
         </form>
         {options}
@@ -1047,7 +856,7 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
         )}
       </div>
 
-      <div
+      {started && <div
         className="flex items-center justify-between gap-3 px-4 py-1.5 font-mono text-[11px] tracking-[0.12em]"
         style={{
           borderTop: "1px solid var(--rd-line)",
@@ -1056,24 +865,24 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
         }}
       >
         <span className="truncate">{status}</span>
-      </div>
+      </div>}
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {selected ? (
+      <div className={`min-h-0 flex-1 overflow-y-auto ${started ? "p-3" : ""}`}>
+        {!started ? <VideoStartScreen onSearch={() => searchRef.current?.focus()} /> : selected ? (
           <div className="space-y-4">
             {playMode === "stream" && streamUrl ? (
               <video
                 key={streamUrl}
                 src={`/api/stream?url=${encodeURIComponent(streamUrl)}`}
                 poster={selected.thumbnail ?? undefined}
-                preload="metadata"
+                preload="auto"
                 controls
                 autoPlay
                 playsInline
                 className="w-full rounded-md aspect-video"
                 style={{ background: "var(--rd-surface)" }}
                 onLoadedData={() => { setPlayerState("ready"); setStatus(selected.title || "Playing through Radium"); }}
-                onError={() => { setStreamUrl(null); setPlayMode("embed"); setStatus("Radium stream blocked — using backup player"); }}
+                onError={() => { setStreamUrl(null); setPlayMode("embed"); setStatus(selected.title); }}
               />
             ) : playMode === "resolving" ? (
               <div className="flex w-full items-center justify-center rounded-md aspect-video animate-pulse font-mono text-[11px]" style={{ background: "var(--rd-surface)", color: "var(--rd-muted)" }}>
@@ -1146,15 +955,17 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {results.map((v) => (
+            {results.map((v, index) => (
               <button
                 key={v.videoId}
+                onPointerEnter={() => { if (v.videoId) void preloadVideo(v.videoId); }}
+                onFocus={() => { if (v.videoId) void preloadVideo(v.videoId); }}
                 onClick={() => openVideo(v)}
                 className="overflow-hidden rounded-lg text-left"
                 style={{ background: "var(--rd-button)", border: "1px solid var(--rd-line)" }}
               >
                  {v.videoId && (
-                   <VideoThumbnail videoId={v.videoId} />
+                   <VideoThumbnail videoId={v.videoId} priority={index < 6} />
                  )}
                 <div className="space-y-1 p-2">
                   <p className="line-clamp-2 text-xs font-medium" style={{ color: "var(--rd-text)" }}>
@@ -1176,7 +987,7 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
             )}
           </div>
         )}
-        {!selected && <div ref={sentinel} className="h-8" />}
+        {started && !selected && <div ref={sentinel} className="h-8" />}
       </div>
     </div>
   );
