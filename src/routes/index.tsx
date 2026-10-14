@@ -381,102 +381,178 @@ function StartScreen({
 type Provider = "invidious" | "piped";
 export const _legacyViews = { PipedView, InvidiousView, OptionsMenu };
 
-const RELAYS = {
-  corsproxy: { label: "corsproxy.io", wrap: (u: string) => "https://corsproxy.io?" + encodeURIComponent(u) },
-  allorigins: { label: "allorigins.win", wrap: (u: string) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u) },
-} as const;
-type Relay = keyof typeof RELAYS;
+const DEFAULT_PROXY_GATEWAY = "/api/public/p?u={url}";
+const GATEWAY_KEY = "radium-proxy-gateway";
+
+function normalizeDestination(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const withScheme = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+  try {
+    return new URL(withScheme).toString();
+  } catch {
+    return null;
+  }
+}
+
+function buildGatewayUrl(gateway: string, destination: string): string {
+  const encoded = encodeURIComponent(destination);
+  return gateway.includes("{url}") ? gateway.replace("{url}", encoded) : gateway + encoded;
+}
 
 function YouTubeTab() {
-  const [input, setInput] = useState("");
-  const [cobaltUrl, setCobaltUrl] = useState<string | null>(null);
-  const [relay, setRelay] = useState<Relay>("corsproxy");
-  const [state, setState] = useState<"idle" | "loading" | "ready" | "buffering" | "error">("idle");
-  const [error, setError] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
+  const [customUrl, setCustomUrl] = useState("");
+  const [active, setActive] = useState<{ label: string; url: string } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [gateway, setGateway] = useState(DEFAULT_PROXY_GATEWAY);
+  const [draftGateway, setDraftGateway] = useState(gateway);
 
-  const load = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const url = input.trim();
-    if (!url) return;
-    track("video", url, { url, source: "cobalt" });
-    setState("loading");
-    setError("");
-    setCobaltUrl(null);
-    try {
-      const res = await fetch("https://cobalt.tools", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ url, downloadMode: "auto" }),
-      });
-      const d = await res.json().catch(() => null);
-      const link: string | undefined = d?.url ?? d?.picker?.[0]?.url;
-      if (!link) throw new Error(d?.error?.code ?? d?.text ?? "No stream link returned");
-      setCobaltUrl(link);
-      setState("buffering");
-    } catch (err) {
-      setState("error");
-      setError(err instanceof Error ? err.message : "Could not load media");
-    }
+  useEffect(() => {
+    const saved = localStorage.getItem(GATEWAY_KEY);
+    if (saved) setGateway(saved);
+  }, []);
+
+  const launch = (label: string, raw: string) => {
+    const dest = normalizeDestination(raw);
+    if (!dest) return;
+    track("video", label, { url: dest, source: "proxy-dashboard" });
+    setActive({ label, url: buildGatewayUrl(gateway, dest) });
   };
 
-  const src = cobaltUrl ? RELAYS[relay].wrap(cobaltUrl) : undefined;
-  const status =
-    state === "loading" ? "Fetching media…" :
-    state === "buffering" ? `Buffering via ${RELAYS[relay].label}…` :
-    state === "ready" ? `Playing via ${RELAYS[relay].label}` :
-    state === "error" ? error : "Paste a video link and press Load Media";
+  const saveGateway = () => {
+    const g = draftGateway.trim() || DEFAULT_PROXY_GATEWAY;
+    setGateway(g);
+    localStorage.setItem(GATEWAY_KEY, g);
+    track("settings", "proxy gateway", { gateway: g });
+    setSettingsOpen(false);
+  };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-        <form className="min-w-[200px] flex-1" onSubmit={load}>
-          <div className="flex items-center gap-2 rounded-md px-3 py-2" style={{ background: "var(--rd-search)", border: "1px solid var(--rd-line)" }}>
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Paste a video URL"
-              aria-label="Video URL"
-              className="w-full bg-transparent font-mono text-sm outline-none"
-              style={{ color: "var(--rd-search-text)" }}
-            />
-            <button type="submit" disabled={state === "loading"} className="shrink-0 rounded px-3 py-1 text-xs font-medium disabled:opacity-60" style={{ background: "var(--rd-accent)", color: "var(--rd-bg)" }}>
-              {state === "loading" ? "Loading…" : "Load Media"}
-            </button>
-          </div>
-        </form>
-        <select
-          value={relay}
-          onChange={(e) => { setRelay(e.target.value as Relay); if (cobaltUrl) setState("buffering"); }}
-          aria-label="Data relay"
-          className="rounded-md px-3 py-2 text-xs"
-          style={btnStyle}
+    <div className="flex h-full min-h-0">
+      {/* Collapsible side menu */}
+      <aside
+        className="flex shrink-0 flex-col gap-1 overflow-y-auto border-r py-3 transition-all duration-200"
+        style={{
+          width: collapsed ? 48 : 240,
+          borderColor: "var(--rd-line)",
+          background: "var(--rd-surface)",
+          paddingLeft: collapsed ? 6 : 12,
+          paddingRight: collapsed ? 6 : 12,
+        }}
+      >
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+          className="mb-2 flex items-center gap-2 rounded-md px-2 py-2 text-xs transition-colors hover:opacity-80"
+          style={{ color: "var(--rd-muted)" }}
         >
-          {(Object.keys(RELAYS) as Relay[]).map((k) => <option key={k} value={k}>Relay · {RELAYS[k].label}</option>)}
-        </select>
-      </div>
-      <div className="flex items-center px-4 py-1.5 font-mono text-[11px] tracking-[0.12em]" style={{ borderTop: "1px solid var(--rd-line)", borderBottom: "1px solid var(--rd-line)", color: state === "error" ? "var(--rd-accent-alt)" : "var(--rd-muted)" }}>
-        <span className="truncate">{status}</span>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {src ? (
-          <video
-            key={src}
-            src={src}
-            controls
-            autoPlay
-            playsInline
-            className="w-full rounded-md aspect-video"
-            style={{ background: "var(--rd-surface)" }}
-            onCanPlay={() => setState("ready")}
-            onWaiting={() => setState("buffering")}
-            onError={() => { setState("error"); setError(`${RELAYS[relay].label} couldn't stream this — try the other relay`); }}
+          {collapsed ? <ArrowRight size={14} /> : <ArrowLeft size={14} />}
+          {!collapsed && <span className="font-mono tracking-[0.14em]">PROXY MENU</span>}
+        </button>
+
+        <button
+          onClick={() => launch("YouTube", "https://www.youtube.com")}
+          className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm font-medium transition-all hover:translate-x-0.5"
+          style={{ background: "var(--rd-accent)", color: "var(--rd-bg)" }}
+        >
+          <Youtube size={16} className="shrink-0" />
+          {!collapsed && "YouTube"}
+        </button>
+
+        {!collapsed && (
+          <form
+            className="mt-2 flex flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              launch(customUrl.trim() || "Custom", customUrl);
+            }}
+          >
+            <label className="font-mono text-[10px] tracking-[0.14em]" style={{ color: "var(--rd-muted)" }}>
+              CUSTOM URL
+            </label>
+            <input
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              placeholder="example.com"
+              aria-label="Custom URL"
+              className="w-full rounded-md bg-transparent px-3 py-2 font-mono text-sm outline-none"
+              style={{ background: "var(--rd-search)", border: "1px solid var(--rd-line)", color: "var(--rd-search-text)" }}
+            />
+            <button
+              type="submit"
+              className="rounded-md px-3 py-2 text-xs font-medium transition-opacity hover:opacity-80"
+              style={btnStyle}
+            >
+              Launch
+            </button>
+          </form>
+        )}
+
+        <div className="mt-auto">
+          <button
+            onClick={() => { setDraftGateway(gateway); setSettingsOpen(true); }}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs transition-opacity hover:opacity-80"
+            style={{ color: "var(--rd-muted)" }}
+          >
+            <Settings size={14} className="shrink-0" />
+            {!collapsed && "Settings"}
+          </button>
+        </div>
+      </aside>
+
+      {/* Proxied viewport */}
+      <div className="min-w-0 flex-1">
+        {active ? (
+          <iframe
+            key={active.url}
+            src={active.url}
+            title={active.label}
+            className="h-full w-full"
+            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
           />
         ) : (
-          <div className="flex aspect-video w-full items-center justify-center rounded-md font-mono text-xs" style={{ background: "var(--rd-surface)", border: "1px solid var(--rd-line)", color: "var(--rd-muted)" }}>
-            {state === "loading" ? <span className="animate-pulse">Loading media…</span> : "No media loaded"}
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+            <Youtube size={32} style={{ color: "var(--rd-accent)" }} />
+            <p className="font-mono text-xs tracking-[0.12em]" style={{ color: "var(--rd-muted)" }}>
+              PICK A SITE FROM THE MENU TO LOAD IT THROUGH THE PROXY GATEWAY
+            </p>
           </div>
         )}
       </div>
+
+      {/* Settings modal */}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "color-mix(in srgb, var(--rd-bg) 70%, transparent)" }}>
+          <div className="w-full max-w-md rounded-lg p-5" style={{ background: "var(--rd-surface)", border: "1px solid var(--rd-line)" }}>
+            <h3 className="mb-3 font-mono text-xs tracking-[0.16em]" style={{ color: "var(--rd-text)" }}>PROXY GATEWAY</h3>
+            <input
+              value={draftGateway}
+              onChange={(e) => setDraftGateway(e.target.value)}
+              aria-label="Proxy gateway URL"
+              className="mb-3 w-full rounded-md bg-transparent px-3 py-2 font-mono text-sm outline-none"
+              style={{ background: "var(--rd-search)", border: "1px solid var(--rd-line)", color: "var(--rd-search-text)" }}
+            />
+            <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--rd-muted)" }}>
+              If YouTube shows "Not connected to the internet" or "Verify you are not a bot", the gateway's
+              hosting IP is flagged by Google. Update the gateway to a clean, non-datacenter IP or an edge
+              worker, then reload the site.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDraftGateway(DEFAULT_PROXY_GATEWAY)} className="rounded-md px-3 py-2 text-xs" style={btnStyle}>
+                Reset
+              </button>
+              <button onClick={() => setSettingsOpen(false)} className="rounded-md px-3 py-2 text-xs" style={btnStyle}>
+                Cancel
+              </button>
+              <button onClick={saveGateway} className="rounded-md px-3 py-2 text-xs font-medium" style={{ background: "var(--rd-accent)", color: "var(--rd-bg)" }}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
