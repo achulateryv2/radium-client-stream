@@ -405,10 +405,13 @@ function YouTubeTab() {
   const [customUrl, setCustomUrl] = useState("");
   const [active, setActive] = useState<{ label: string; url: string } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [gateway, setGateway] = useState(
-    () => localStorage.getItem(GATEWAY_KEY) ?? DEFAULT_PROXY_GATEWAY,
-  );
+  const [gateway, setGateway] = useState(DEFAULT_PROXY_GATEWAY);
   const [draftGateway, setDraftGateway] = useState(gateway);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(GATEWAY_KEY);
+    if (saved) setGateway(saved);
+  }, []);
 
   const launch = (label: string, raw: string) => {
     const dest = normalizeDestination(raw);
