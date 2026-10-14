@@ -379,14 +379,105 @@ function StartScreen({
 }
 
 type Provider = "invidious" | "piped";
+export const _legacyViews = { PipedView, InvidiousView, OptionsMenu };
+
+const RELAYS = {
+  corsproxy: { label: "corsproxy.io", wrap: (u: string) => "https://corsproxy.io?" + encodeURIComponent(u) },
+  allorigins: { label: "allorigins.win", wrap: (u: string) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u) },
+} as const;
+type Relay = keyof typeof RELAYS;
 
 function YouTubeTab() {
-  const [provider, setProvider] = useState<Provider>("piped");
-  const options = <OptionsMenu provider={provider} onPick={setProvider} />;
-  return provider === "piped" ? (
-    <PipedView key="piped" options={options} />
-  ) : (
-    <InvidiousView key="invidious" options={options} />
+  const [input, setInput] = useState("");
+  const [cobaltUrl, setCobaltUrl] = useState<string | null>(null);
+  const [relay, setRelay] = useState<Relay>("corsproxy");
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "buffering" | "error">("idle");
+  const [error, setError] = useState("");
+
+  const load = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = input.trim();
+    if (!url) return;
+    track("video", url, { url, source: "cobalt" });
+    setState("loading");
+    setError("");
+    setCobaltUrl(null);
+    try {
+      const res = await fetch("https://cobalt.tools", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ url, downloadMode: "auto" }),
+      });
+      const d = await res.json().catch(() => null);
+      const link: string | undefined = d?.url ?? d?.picker?.[0]?.url;
+      if (!link) throw new Error(d?.error?.code ?? d?.text ?? "No stream link returned");
+      setCobaltUrl(link);
+      setState("buffering");
+    } catch (err) {
+      setState("error");
+      setError(err instanceof Error ? err.message : "Could not load media");
+    }
+  };
+
+  const src = cobaltUrl ? RELAYS[relay].wrap(cobaltUrl) : undefined;
+  const status =
+    state === "loading" ? "Fetching media…" :
+    state === "buffering" ? `Buffering via ${RELAYS[relay].label}…` :
+    state === "ready" ? `Playing via ${RELAYS[relay].label}` :
+    state === "error" ? error : "Paste a video link and press Load Media";
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+        <form className="min-w-[200px] flex-1" onSubmit={load}>
+          <div className="flex items-center gap-2 rounded-md px-3 py-2" style={{ background: "var(--rd-search)", border: "1px solid var(--rd-line)" }}>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Paste a video URL"
+              aria-label="Video URL"
+              className="w-full bg-transparent font-mono text-sm outline-none"
+              style={{ color: "var(--rd-search-text)" }}
+            />
+            <button type="submit" disabled={state === "loading"} className="shrink-0 rounded px-3 py-1 text-xs font-medium disabled:opacity-60" style={{ background: "var(--rd-accent)", color: "var(--rd-bg)" }}>
+              {state === "loading" ? "Loading…" : "Load Media"}
+            </button>
+          </div>
+        </form>
+        <select
+          value={relay}
+          onChange={(e) => { setRelay(e.target.value as Relay); if (cobaltUrl) setState("buffering"); }}
+          aria-label="Data relay"
+          className="rounded-md px-3 py-2 text-xs"
+          style={btnStyle}
+        >
+          {(Object.keys(RELAYS) as Relay[]).map((k) => <option key={k} value={k}>Relay · {RELAYS[k].label}</option>)}
+        </select>
+      </div>
+      <div className="flex items-center px-4 py-1.5 font-mono text-[11px] tracking-[0.12em]" style={{ borderTop: "1px solid var(--rd-line)", borderBottom: "1px solid var(--rd-line)", color: state === "error" ? "var(--rd-accent-alt)" : "var(--rd-muted)" }}>
+        <span className="truncate">{status}</span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {src ? (
+          <video
+            key={src}
+            src={src}
+            controls
+            autoPlay
+            playsInline
+            className="w-full rounded-md aspect-video"
+            style={{ background: "var(--rd-surface)" }}
+            onCanPlay={() => setState("ready")}
+            onWaiting={() => setState("buffering")}
+            onError={() => { setState("error"); setError(`${RELAYS[relay].label} couldn't stream this — try the other relay`); }}
+          />
+        ) : (
+          <div className="flex aspect-video w-full items-center justify-center rounded-md font-mono text-xs" style={{ background: "var(--rd-surface)", border: "1px solid var(--rd-line)", color: "var(--rd-muted)" }}>
+            {state === "loading" ? <span className="animate-pulse">Loading media…</span> : "No media loaded"}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
