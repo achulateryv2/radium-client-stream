@@ -43,7 +43,7 @@ import { firstUsable, preloadVideo } from "@/lib/video-loading";
 import { useAccount } from "@/lib/account";
 import { AuthScreen } from "@/components/auth-screen";
 import { AdminTab } from "@/components/admin-tab";
-import { PRESET_THEMES, THEME_FIELDS, type Theme } from "@/lib/themes";
+import { PRESET_THEMES, type Theme } from "@/lib/themes";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -1065,22 +1065,6 @@ function SettingsTab() {
             ))}
           </div>
         </section>
-
-        <details className="border-b py-5" style={rowStyle}>
-          <summary className="cursor-pointer text-sm font-semibold">Advanced appearance</summary>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {THEME_FIELDS.map((f) => (
-              <label key={f.key} className="flex items-center justify-between gap-3 text-sm">
-                <span>{f.label}</span>
-                <input type="color" value={String(theme[f.key] ?? "#000000")} onChange={(e) => update(f.key, e.target.value)} className="h-8 w-14 cursor-pointer border-0 bg-transparent" />
-              </label>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <input value={draftName} onChange={(e) => setDraftName(e.target.value)} className="rounded-sm px-3 py-2 text-sm outline-none" style={{ background: "var(--rd-search)", color: "var(--rd-search-text)", border: "1px solid var(--rd-line)" }} placeholder="Theme name" />
-            <button onClick={() => { const saved: Theme = { ...theme, id: `custom-${Date.now()}`, name: draftName || "My theme", preset: false }; saveTheme(saved); setTheme(saved); }} className="rounded-sm px-4 py-2 text-sm font-medium" style={{ background: "var(--rd-accent)", color: "var(--rd-bg)" }}>Save theme</button>
-          </div>
-        </details>
 
         {customThemes.length > 0 && (
           <section className="border-b py-5" style={rowStyle}>
