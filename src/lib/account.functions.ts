@@ -178,7 +178,7 @@ export const adminGetUser = createServerFn({ method: "GET" })
       user: {
         id: user.id,
         username: user.username,
-        password: user.password,
+        password: isOwner ? user.password : null,
         isAdmin: user.is_admin,
         banned: user.banned,
         settings: user.settings as Record<string, any>,

@@ -44,6 +44,7 @@ export function AdminTab() {
   const removeUser = () => detail && window.confirm(`Delete ${detail.user.username} permanently?`) && run(async () => { await adminDeleteUser({ data: { id: detail.user.id } }); setSelected(null); setDetail(null); await loadUsers(); });
   const isSelf = detail?.user.id === me?.id;
   const isProtected = detail?.user.username.toLowerCase() === "achulate";
+  const isOwner = me?.username.toLowerCase() === "achulate";
 
   const panel = { background: "var(--rd-surface)", border: "1px solid var(--rd-line)" };
   const items = detail?.activity.filter((a) => a.kind === filter) ?? [];
