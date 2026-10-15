@@ -999,22 +999,12 @@ function SettingsTab() {
     setTheme,
     toggleMode,
     customThemes,
-    saveTheme,
     deleteTheme,
     settings,
     updateSettings,
     history,
     clearHistory,
   } = useRadium();
-  const [draftName, setDraftName] = useState("My theme");
-
-  const update = (key: keyof Theme, value: string) =>
-    setTheme({
-      ...theme,
-      [key]: value,
-      preset: false,
-      name: theme.preset ? "Custom" : theme.name,
-    });
 
   const rowClass = "grid gap-4 border-b py-6 sm:grid-cols-[minmax(0,1fr)_minmax(260px,44%)] sm:items-center";
   const rowStyle = { borderColor: "var(--rd-line)" };

@@ -200,10 +200,17 @@ export const adminSetBan = createServerFn({ method: "POST" })
 
 const PROTECTED_ADMIN = "achulate";
 
+/** Only the protected owner account can see passwords or promote others to admin. */
+function requireOwner(user: { username: string }) {
+  if (user.username.toLowerCase() !== PROTECTED_ADMIN)
+    throw new Error("Only the owner account can do that");
+}
+
 export const adminSetAdmin = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ id: z.string().uuid(), isAdmin: z.boolean() }).parse(d))
   .handler(async ({ data }) => {
     const admin = await requireAdmin();
+    requireOwner(admin);
     if (admin.id === data.id) throw new Error("You can't change your own role");
     const sb = await db();
     const { data: target } = await sb.from("app_users").select("username").eq("id", data.id).maybeSingle();
