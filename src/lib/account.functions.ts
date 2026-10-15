@@ -163,7 +163,8 @@ export const adminListUsers = createServerFn({ method: "GET" }).handler(async ()
 export const adminGetUser = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
-    await requireAdmin();
+    const admin = await requireAdmin();
+    const isOwner = admin.username.toLowerCase() === "achulate";
     const sb = await db();
     const { data: user } = await sb.from("app_users").select("*").eq("id", data.id).maybeSingle();
     if (!user) throw new Error("User not found");
