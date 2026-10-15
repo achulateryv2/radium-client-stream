@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { thumbUrl } from "@/lib/piped";
 
 /** Start loading a few rows ahead without fetching the entire result list. */
-export function VideoThumbnail({ videoId }: { videoId: string }) {
+export function VideoThumbnail({ videoId, priority = false }: { videoId: string; priority?: boolean }) {
   const imageRef = useRef<HTMLImageElement>(null);
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [failedId, setFailedId] = useState<string | null>(null);
@@ -10,7 +10,7 @@ export function VideoThumbnail({ videoId }: { videoId: string }) {
   useEffect(() => {
     const image = imageRef.current;
     if (!image) return;
-    if (typeof IntersectionObserver === "undefined") {
+    if (priority || typeof IntersectionObserver === "undefined") {
       setLoadedId(videoId);
       return;
     }
@@ -25,7 +25,7 @@ export function VideoThumbnail({ videoId }: { videoId: string }) {
     );
     observer.observe(image);
     return () => observer.disconnect();
-  }, [videoId]);
+  }, [videoId, priority]);
 
   const fallback = failedId === videoId;
   return (
@@ -42,6 +42,7 @@ export function VideoThumbnail({ videoId }: { videoId: string }) {
       className="aspect-video w-full object-cover"
       loading="eager"
       decoding="async"
+      fetchPriority={priority ? "high" : "auto"}
     />
   );
 }

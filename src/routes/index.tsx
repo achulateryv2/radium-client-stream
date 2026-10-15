@@ -486,7 +486,7 @@ function PipedView({ options }: { options: React.ReactNode }) {
     setTerm(q);
     setPage(1);
     setNext(null);
-    const r = await firstUsable([
+    const r = await firstUsable<{ source: Provider; results: PipedItem[]; next: string | null }>([
       pipedSearch(q).then((r) => r.success ? { source: "piped" as const, results: r.results, next: r.nextpage ?? null } : { source: "piped" as const, results: [], next: null }),
       searchVideos(q, { region: "SG" }).then((r) => ({ source: "invidious" as const, results: r.success ? r.results.filter((v) => v.videoId).map(invToPiped) : [], next: null })),
     ], (r) => r.results.length > 0);
@@ -712,7 +712,7 @@ function InvidiousView({ options }: { options: React.ReactNode }) {
     setTerm(q);
     setPage(1);
     setNext(null);
-    const r = await firstUsable([
+    const r = await firstUsable<{ source: Provider; results: InvidiousVideo[]; next: string | null }>([
       searchVideos(q, { region: "SG" }).then((r) => ({ source: "invidious" as const, results: r.success ? r.results : [], next: null })),
       pipedSearch(q).then((r) => ({ source: "piped" as const, results: r.success ? r.results.map(pipedToInv) : [], next: r.success ? r.nextpage ?? null : null })),
     ], (r) => r.results.length > 0);
