@@ -10,3 +10,5 @@
 - [ ] Restore YouTube's Invidious/Piped search with a browser-style opening screen
 - [ ] Remove provider connection messages and accelerate video/thumbnail preloading
 - [ ] Verify YouTube search, provider switching and video opening
+- [ ] Replace SoundCloud with Spotify and match the supplied music layout
+- [ ] Verify Spotify playlist selection, saved library and link playback
