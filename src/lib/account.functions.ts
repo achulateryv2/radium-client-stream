@@ -197,3 +197,32 @@ export const adminSetBan = createServerFn({ method: "POST" })
     await sb.from("app_users").update({ banned: data.banned }).eq("id", data.id);
     return { ok: true };
   });
+
+const PROTECTED_ADMIN = "achulate";
+
+export const adminSetAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ id: z.string().uuid(), isAdmin: z.boolean() }).parse(d))
+  .handler(async ({ data }) => {
+    const admin = await requireAdmin();
+    if (admin.id === data.id) throw new Error("You can't change your own role");
+    const sb = await db();
+    const { data: target } = await sb.from("app_users").select("username").eq("id", data.id).maybeSingle();
+    if (!target) throw new Error("User not found");
+    if (target.username.toLowerCase() === PROTECTED_ADMIN) throw new Error("This account is protected");
+    await sb.from("app_users").update({ is_admin: data.isAdmin }).eq("id", data.id);
+    return { ok: true };
+  });
+
+export const adminDeleteUser = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const admin = await requireAdmin();
+    if (admin.id === data.id) throw new Error("You can't delete yourself");
+    const sb = await db();
+    const { data: target } = await sb.from("app_users").select("username").eq("id", data.id).maybeSingle();
+    if (!target) throw new Error("User not found");
+    if (target.username.toLowerCase() === PROTECTED_ADMIN) throw new Error("This account is protected");
+    await sb.from("app_activity").delete().eq("user_id", data.id);
+    await sb.from("app_users").delete().eq("id", data.id);
+    return { ok: true };
+  });
