@@ -142,7 +142,7 @@ function ClientShell() {
           [
             ["browser", "Browser"],
             ["youtube", "YouTube"],
-            ["music", "Music"],
+            ["music", "Spotify"],
             ["settings", "Settings"],
             ...(user?.isAdmin ? ([["admin", "Admin"]] as [Tab, string][]) : []),
           ] as [Tab, string][]

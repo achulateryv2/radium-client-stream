@@ -16,3 +16,5 @@ Use the shared VideoThumbnail for both video result grids; viewport-aware preloa
 Client colour swatches update both accent roles together, and both interface-mode controls use the provider's toggleMode to preserve the chosen signal colours while changing surfaces.
 
 Accounts are custom (app_users/app_activity tables, cookie session in src/lib/account.functions.ts), not Cloud Auth, because usernames are free-form and the admin must view stored credentials; all access goes through server functions with the admin client, and "deleting" history only sets hidden=true.
+
+Music uses official Spotify embeds for playback, validated Spotify links, and curated playlist metadata in a browser-safe module; this avoids unsupported direct audio extraction and keeps Spotify's playback restrictions intact.
