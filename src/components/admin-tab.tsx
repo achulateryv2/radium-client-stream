@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Ban, RefreshCw, ShieldCheck } from "lucide-react";
-import { adminGetUser, adminListUsers, adminSetBan } from "@/lib/account.functions";
+import { Ban, RefreshCw, ShieldCheck, ShieldPlus, Trash2 } from "lucide-react";
+import { adminDeleteUser, adminGetUser, adminListUsers, adminSetAdmin, adminSetBan } from "@/lib/account.functions";
+import { useAccount } from "@/lib/account";
 
 type UserRow = Awaited<ReturnType<typeof adminListUsers>>[number];
 type Detail = Awaited<ReturnType<typeof adminGetUser>>;
@@ -32,6 +33,17 @@ export function AdminTab() {
       await Promise.all([loadUsers(), loadDetail(detail.user.id)]);
     } finally { setBusy(false); }
   };
+
+  const { user: me } = useAccount();
+  const [err, setErr] = useState("");
+  const run = async (fn: () => Promise<unknown>, after?: () => void) => {
+    setBusy(true); setErr("");
+    try { await fn(); after?.(); } catch (e) { setErr(e instanceof Error ? e.message : "Action failed"); } finally { setBusy(false); }
+  };
+  const toggleAdmin = () => detail && run(async () => { await adminSetAdmin({ data: { id: detail.user.id, isAdmin: !detail.user.isAdmin } }); await Promise.all([loadUsers(), loadDetail(detail.user.id)]); });
+  const removeUser = () => detail && window.confirm(`Delete ${detail.user.username} permanently?`) && run(async () => { await adminDeleteUser({ data: { id: detail.user.id } }); setSelected(null); setDetail(null); await loadUsers(); });
+  const isSelf = detail?.user.id === me?.id;
+  const isProtected = detail?.user.username.toLowerCase() === "achulate";
 
   const panel = { background: "var(--rd-surface)", border: "1px solid var(--rd-line)" };
   const items = detail?.activity.filter((a) => a.kind === filter) ?? [];
@@ -76,6 +88,17 @@ export function AdminTab() {
                 <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>STATUS</span>
                 <span className="text-xs" style={{ color: detail.user.banned ? "var(--rd-accent)" : "var(--rd-accent-alt)" }}>{detail.user.banned ? "Banned" : "Active"}</span>
               </div>
+              <div className="flex flex-wrap gap-2">
+              {!isSelf && !isProtected && (
+                <button disabled={busy} onClick={() => void toggleAdmin()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60" style={{ background: "var(--rd-button)", color: "var(--rd-accent-alt)" }}>
+                  <ShieldPlus size={13} />{detail.user.isAdmin ? "Remove admin" : "Promote to admin"}
+                </button>
+              )}
+              {!isSelf && !isProtected && (
+                <button disabled={busy} onClick={() => void removeUser()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60" style={{ background: "var(--rd-button)", color: "var(--rd-accent)" }}>
+                  <Trash2 size={13} />Delete user
+                </button>
+              )}
               {!detail.user.isAdmin && (
                 <button disabled={busy} onClick={() => void toggleBan()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60"
                   style={detail.user.banned ? { background: "var(--rd-button)", color: "var(--rd-accent-alt)" } : { background: "var(--rd-accent)", color: "var(--rd-bg)" }}>
@@ -83,7 +106,9 @@ export function AdminTab() {
                   {detail.user.banned ? "Unban user" : "Ban user"}
                 </button>
               )}
+              </div>
             </div>
+            {err && <p role="alert" className="text-xs" style={{ color: "var(--rd-accent)" }}>{err}</p>}
 
             <div className="flex flex-wrap gap-1" style={{ borderBottom: "1px solid var(--rd-line)" }}>
               {([["search", "Search history"], ["video", "Video history"], ["music", "Music history"], ["settings", "Settings"]] as [Filter, string][]).map(([k, l]) => (
