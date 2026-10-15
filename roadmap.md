@@ -12,4 +12,9 @@
 - [ ] Verify YouTube search and video opening with a responding external provider
 - [x] Replace SoundCloud with Spotify and match the supplied music layout
 - [x] Verify Spotify playlist selection, saved library and link embedding
-- [ ] Verify audible Spotify playback — Spotify's own embed also crashes when opened directly in this test browser
+- [x] Retire Spotify playback verification — music reverted to SoundCloud
+- [ ] Restore unbranded SoundCloud and remove Spotify logins
+- [ ] Add own-password settings and owner-only password resets
+- [ ] Rename promoted accounts to mods with server-enforced permissions
+- [ ] Add shared Chat between Browser and YouTube
+- [ ] Verify new account, password and chat flows
