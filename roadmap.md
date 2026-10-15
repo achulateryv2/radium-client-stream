@@ -13,8 +13,8 @@
 - [x] Replace SoundCloud with Spotify and match the supplied music layout
 - [x] Verify Spotify playlist selection, saved library and link embedding
 - [x] Retire Spotify playback verification — music reverted to SoundCloud
-- [ ] Restore unbranded SoundCloud and remove Spotify logins
-- [ ] Add own-password settings and owner-only password resets
-- [ ] Rename promoted accounts to mods with server-enforced permissions
-- [ ] Add shared Chat between Browser and YouTube
-- [ ] Verify new account, password and chat flows
+- [x] Restore unbranded SoundCloud and remove Spotify logins (official widget retains its required branding)
+- [x] Add own-password settings and owner-only password resets
+- [x] Rename promoted accounts to mods with server-enforced permissions
+- [x] Add shared Chat between Browser and YouTube
+- [x] Verify new account, password and chat flows

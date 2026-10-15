@@ -115,7 +115,7 @@ function ClientShell() {
             <span className="status-glow h-1.5 w-1.5 rounded-full" style={{ background: "var(--rd-accent-alt)" }} />
             PROTECTED
           </span>
-          {settings.singaporeClock && <SingaporeClock />}
+          {settings.singaporeClock && <span className="hidden lg:inline-flex"><SingaporeClock /></span>}
           <PingCounter />
           <button
             onClick={toggleMode}
@@ -131,10 +131,10 @@ function ClientShell() {
           >
             BY JAMES XIE
           </span>
-          <span className="font-mono text-[11px] tracking-[0.15em]" style={{ color: "var(--rd-text)" }}>
+          <span className="max-w-24 truncate font-mono text-[11px] sm:max-w-48" style={{ color: "var(--rd-text)" }}>
             {user?.username}
           </span>
-          <button onClick={() => void signOut()} className="rounded-sm px-2 py-1 font-mono text-[10px] tracking-[0.15em]" style={{ background: "var(--rd-button)", color: "var(--rd-accent)" }}>
+          <button onClick={() => void signOut()} className="shrink-0 whitespace-nowrap rounded-sm px-2 py-1 font-mono text-[10px]" style={{ background: "var(--rd-button)", color: "var(--rd-accent)" }}>
             SIGN OUT
           </button>
         </div>

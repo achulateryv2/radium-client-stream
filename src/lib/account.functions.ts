@@ -211,7 +211,7 @@ export const adminSetBan = createServerFn({ method: "POST" })
 
 const PROTECTED_ADMIN = "achulate";
 
-/** Only the protected owner account can see passwords or promote others to admin. */
+/** Only the protected owner role can promote moderators. */
 function requireOwner(user: { role: AccountRole }) {
   if (!canPromote(user.role))
     throw new Error("Only the owner account can do that");
