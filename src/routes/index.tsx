@@ -7,6 +7,7 @@ import {
   LockKeyhole,
   Moon,
   Music,
+  MessageSquare,
   RefreshCw,
   Search,
   Settings,
@@ -42,6 +43,8 @@ import { track } from "@/lib/track";
 import { firstUsable, preloadVideo } from "@/lib/video-loading";
 import { useAccount } from "@/lib/account";
 import { AuthScreen } from "@/components/auth-screen";
+import { ChatTab } from "@/components/chat-tab";
+import { PasswordSettings } from "@/components/password-settings";
 import { AdminTab } from "@/components/admin-tab";
 import { PRESET_THEMES, type Theme } from "@/lib/themes";
 
@@ -66,7 +69,7 @@ export const Route = createFileRoute("/")({
   component: RadiumApp,
 });
 
-type Tab = "browser" | "youtube" | "music" | "settings" | "admin";
+type Tab = "chat" | "browser" | "youtube" | "music" | "settings" | "admin";
 
 function RadiumApp() {
   const account = useAccount();
@@ -137,20 +140,21 @@ function ClientShell() {
         </div>
       </header>
 
-      <nav className="flex h-11 shrink-0 items-stretch gap-0 px-3" style={{ background: "var(--rd-surface)", borderBottom: "1px solid var(--rd-line)" }}>
+      <nav className="flex h-11 shrink-0 items-stretch gap-0 overflow-x-auto px-3" style={{ background: "var(--rd-surface)", borderBottom: "1px solid var(--rd-line)" }}>
         {(
           [
             ["browser", "Browser"],
+            ["chat", "Chat"],
             ["youtube", "YouTube"],
             ["music", "Music"],
             ["settings", "Settings"],
-            ...(user?.isAdmin ? ([["admin", "Admin"]] as [Tab, string][]) : []),
+            ...(user?.isAdmin ? ([["admin", user?.role === "owner" ? "Admin" : "Mod"]] as [Tab, string][]) : []),
           ] as [Tab, string][]
         ).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className="flex min-w-24 items-center justify-center gap-2 border-x px-4 text-xs transition-colors"
+            className="flex shrink-0 items-center justify-center gap-2 border-x px-3 text-xs transition-colors"
             style={{
               color: tab === id ? "var(--rd-text)" : "var(--rd-muted)",
               background: tab === id ? "var(--rd-bg)" : "transparent",
@@ -159,7 +163,7 @@ function ClientShell() {
               borderRightColor: tab === id ? "var(--rd-line)" : "transparent",
             }}
           >
-            {id === "browser" ? <ShieldCheck size={13} className="text-client-signal" /> : id === "youtube" ? <Youtube size={14} className="text-client-signal" /> : id === "music" ? <Music size={13} className="text-client-signal" /> : id === "admin" ? <LockKeyhole size={13} className="text-client-signal" /> : <Settings size={13} className="text-client-signal" />}
+            {id === "browser" ? <ShieldCheck size={13} className="text-client-signal" /> : id === "chat" ? <MessageSquare size={13} className="text-client-signal" /> : id === "youtube" ? <Youtube size={14} className="text-client-signal" /> : id === "music" ? <Music size={13} className="text-client-signal" /> : id === "admin" ? <LockKeyhole size={13} className="text-client-signal" /> : <Settings size={13} className="text-client-signal" />}
             {label}
           </button>
         ))}
@@ -167,6 +171,7 @@ function ClientShell() {
 
       <div className="min-h-0 flex-1">
         {tab === "browser" && <BrowserTab />}
+        {tab === "chat" && <ChatTab />}
         {tab === "youtube" && <YouTubeTab />}
         <div className={tab === "music" ? "h-full" : "hidden"}>
           <MusicTab />
@@ -1020,6 +1025,7 @@ function SettingsTab() {
   return (
     <div className="h-full overflow-auto px-5 sm:px-8">
       <div className="mx-auto max-w-5xl pb-8">
+        <section className={rowClass} style={rowStyle}><h2 className="text-sm font-semibold">Password</h2><PasswordSettings /></section>
 
         <section className={rowClass} style={rowStyle}>
           {rowCopy("Home page", "Opens when you select Home")}
