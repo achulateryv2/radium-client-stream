@@ -7,6 +7,9 @@
 - [x] Restore Invidious result thumbnails when public image links fail
 - [x] Replace Music with real SoundCloud discovery, search and on-demand playback
 - [x] Verify Music controls, appearance and failure states
-- [ ] Restore YouTube's Invidious/Piped search with a browser-style opening screen
-- [ ] Remove provider connection messages and accelerate video/thumbnail preloading
-- [ ] Verify YouTube search, provider switching and video opening
+- [x] Restore YouTube's Invidious/Piped search with a browser-style opening screen
+- [x] Remove provider connection messages and accelerate video/thumbnail preloading
+- [ ] Verify YouTube search and video opening with a responding external provider
+- [x] Replace SoundCloud with Spotify and match the supplied music layout
+- [x] Verify Spotify playlist selection, saved library and link embedding
+- [ ] Verify audible Spotify playback — Spotify's own embed also crashes when opened directly in this test browser

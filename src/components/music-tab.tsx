@@ -1,216 +1,101 @@
-/**
- * Music tab: SoundCloud-style search page. Songs play inside Radium through
- * SoundCloud's official player (kept mounted so playback survives tab switches).
- */
-import { track } from "@/lib/track";
 import { useEffect, useRef, useState } from "react";
-import { BadgeCheck, Copy, Heart, MessageSquare, MoreHorizontal, Pause, Play, Repeat, Repeat1, Repeat2, Search, Share } from "lucide-react";
-
-type Track = {
-  id: number; title: string; url: string; artist: string; artwork: string | null; duration: number;
-  plays: number | null; likes: number | null; comments?: number | null; genre?: string | null; created?: string | null;
-};
-type Loop = "off" | "all" | "one";
-type Widget = {
-  bind: (e: string, cb: (d?: { currentPosition?: number; relativePosition?: number }) => void) => void;
-  play: () => void; pause: () => void; seekTo: (ms: number) => void;
-};
-declare global { interface Window { SC?: { Widget: ((el: HTMLIFrameElement) => Widget) & { Events: { READY: string; PLAY: string; PAUSE: string; PLAY_PROGRESS: string; FINISH: string } } } } }
-
-const fmt = (n: number | null | undefined) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
-const time = (ms: number) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-const ago = (iso?: string | null) => {
-  if (!iso) return "";
-  const d = (Date.now() - new Date(iso).getTime()) / 864e5;
-  if (d < 1) return "today"; if (d < 30) return `${Math.floor(d)} days ago`;
-  if (d < 365) return `${Math.floor(d / 30)} months ago`; const y = Math.floor(d / 365); return `${y} year${y > 1 ? "s" : ""} ago`;
-};
-const bars = (id: number) => Array.from({ length: 90 }, (_, i) => 25 + Math.abs(Math.sin(id * 0.001 + i * 1.7) * 50 + Math.sin(i * 0.37 + id) * 25));
-
-async function load(q: string): Promise<{ tracks: Track[]; error?: string }> {
-  try {
-    const r = await fetch(`/api/public/soundcloud?q=${encodeURIComponent(q)}&_t=${Date.now()}`, { cache: "no-store" });
-    const d = JSON.parse(await r.text()) as { success: boolean; tracks?: Track[]; error?: string };
-    return d.success ? { tracks: d.tracks ?? [] } : { tracks: [], error: d.error ?? "SoundCloud isn't responding right now." };
-  } catch { return { tracks: [] }; }
-}
+import { ArrowDown, ArrowLeft, ArrowRight, Check, ExternalLink, Heart, Home, Library, Menu, Music2, Play, Plus, Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAccount } from "@/lib/account";
+import { track } from "@/lib/track";
+import { parseSpotifyLink, spotifyPicks, spotifyUrl, type SpotifyItem } from "@/lib/spotify";
 
 export function MusicTab() {
+  const { user } = useAccount();
+  const [view, setView] = useState<"home" | "search" | "liked">("home");
   const [query, setQuery] = useState("");
-  const [heading, setHeading] = useState("Trending on SoundCloud");
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [busy, setBusy] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [current, setCurrent] = useState<Track | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [loop, setLoop] = useState<Loop>("off");
-  const frame = useRef<HTMLIFrameElement>(null);
-  const widget = useRef<Widget | null>(null);
-  const state = useRef({ loop, tracks, current });
-  state.current = { loop, tracks, current };
-
-  const run = async (q: string, label: string) => {
-    setBusy(true); setError(null); setHeading(label);
-    const r = await load(q);
-    setTracks(r.tracks);
-    if (!r.tracks.length) setError(r.error ?? "No songs found.");
-    setBusy(false);
-  };
-  useEffect(() => { void run("", "Trending on SoundCloud"); }, []);
+  const [current, setCurrent] = useState<SpotifyItem>(spotifyPicks[0] ?? { id: "", type: "playlist", title: "Spotify", subtitle: "" });
+  const [recent, setRecent] = useState<SpotifyItem[]>([]);
+  const [liked, setLiked] = useState<SpotifyItem[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
+  const [details, setDetails] = useState(true);
+  const [error, setError] = useState("");
+  const [playerReady, setPlayerReady] = useState(false);
+  const [playerFailed, setPlayerFailed] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const storageKey = `radium-spotify:${user?.id ?? "guest"}`;
 
   useEffect(() => {
-    if (window.SC) return;
-    const s = document.createElement("script");
-    s.src = "https://w.soundcloud.com/player/api.js";
-    document.body.appendChild(s);
-  }, []);
-
-  const onFrameLoad = () => {
-    const SC = window.SC; if (!SC || !frame.current) return;
-    const w = SC.Widget(frame.current); widget.current = w;
-    w.bind(SC.Widget.Events.READY, () => w.play());
-    w.bind(SC.Widget.Events.PLAY, () => setPlaying(true));
-    w.bind(SC.Widget.Events.PAUSE, () => setPlaying(false));
-    w.bind(SC.Widget.Events.PLAY_PROGRESS, (d) => setProgress(d?.relativePosition ?? 0));
-    w.bind(SC.Widget.Events.FINISH, () => {
-      const { loop: l, tracks: list, current: c } = state.current;
-      if (l === "one") { w.seekTo(0); w.play(); return; }
-      const i = list.findIndex((t) => t.id === c?.id);
-      const next = list[i + 1] ?? (l === "all" ? list[0] : undefined);
-      if (next) setCurrent(next); else setPlaying(false);
-    });
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) ?? "{}") as { liked?: SpotifyItem[]; recent?: SpotifyItem[] };
+      const valid = (items: unknown): SpotifyItem[] => Array.isArray(items) ? items.filter((item) => item && typeof item.title === "string" && parseSpotifyLink(spotifyUrl(item))).slice(0, 30) : [];
+      setLiked(valid(saved.liked)); setRecent(valid(saved.recent));
+    } catch { /* Empty library when storage is unavailable. */ }
+  }, [storageKey]);
+  useEffect(() => {
+    if (playerReady) return;
+    const timeout = setTimeout(() => setPlayerFailed(true), 15000);
+    return () => clearTimeout(timeout);
+  }, [current.id, playerReady]);
+  const persist = (nextLiked: SpotifyItem[], nextRecent: SpotifyItem[]) => {
+    try { localStorage.setItem(storageKey, JSON.stringify({ liked: nextLiked, recent: nextRecent })); } catch { /* Browsing still works without storage. */ }
   };
-
-  const pick = (t: Track) => {
-    if (current?.id === t.id && widget.current) { playing ? widget.current.pause() : widget.current.play(); return; }
-    track("music", `${t.title} — ${t.artist}`, { trackId: t.id, url: t.url, artist: t.artist, genre: t.genre ?? null });
-    setProgress(0); setCurrent(t);
+  const pick = (item: SpotifyItem) => {
+    if (item.id !== current.id) { setPlayerReady(false); setPlayerFailed(false); }
+    setCurrent(item); setError("");
+    const next = [item, ...recent.filter((old) => old.id !== item.id)].slice(0, 30);
+    setRecent(next); persist(liked, next);
+    track("music", item.title, { source: "spotify", url: spotifyUrl(item), spotifyId: item.id });
   };
-  const nextLoop = () => setLoop((l) => (l === "off" ? "all" : l === "all" ? "one" : "off"));
-  const LoopIcon = loop === "one" ? Repeat1 : Repeat;
-  const lead = tracks[0];
-  const artists = [...new Map(tracks.map((t) => [t.artist, t])).values()].slice(0, 3);
-  const tabs = ["Everything", "Tracks", "People", "Albums", "Playlists"];
+  const toggleLike = (item: SpotifyItem) => {
+    const active = liked.some((old) => old.id === item.id);
+    const next = active ? liked.filter((old) => old.id !== item.id) : [item, ...liked];
+    setLiked(next); persist(next, recent);
+    track("music", item.title, { source: "spotify", preference: active ? "unlike" : "like", url: spotifyUrl(item) });
+  };
+  const search = () => { setView("search"); setTimeout(() => input.current?.focus(), 0); };
+  const submit = () => {
+    const value = query.trim(); if (!value) return;
+    track("search", value, { source: "spotify" });
+    const item = parseSpotifyLink(value);
+    if (item) { pick(item); return; }
+    if (/^https?:\/\//.test(value)) { setError("Paste a Spotify track, album, artist, podcast or playlist link."); return; }
+    setView("search"); setError("");
+  };
+  const results = (view === "liked" ? liked : spotifyPicks).filter((item) => view !== "search" || `${item.title} ${item.subtitle}`.toLowerCase().includes(query.toLowerCase()));
+  const isLiked = liked.some((item) => item.id === current.id);
+  const art = (item: SpotifyItem, className = "") => item.artwork ? <img src={item.artwork} alt={item.title} className={className} loading="lazy" /> : <div className={`spotify-placeholder ${className}`}><Music2 size={32} /></div>;
+  const card = (item: SpotifyItem) => <Button variant="ghost" className="spotify-card" key={item.id} onClick={() => pick(item)} aria-label={`Play ${item.title}`}>
+    <div className="spotify-card-art">{art(item)}<span className="spotify-play"><Play fill="currentColor" size={22} /></span></div>
+    <strong>{item.title}</strong><span>{item.subtitle}</span>
+  </Button>;
 
-  return (
-    <div className="flex h-full flex-col" style={{ background: "var(--rd-bg)", color: "var(--rd-text)" }}>
-      <header className="flex shrink-0 flex-wrap items-center gap-4 px-6 py-3" style={{ borderBottom: "1px solid var(--rd-line)" }}>
-        <span className="flex items-center gap-2 text-lg font-bold tracking-[0.12em]">
-          <span className="flex items-end gap-[2px]">{[6, 9, 12, 15, 12, 18].map((h, i) => <span key={i} className="w-[2px]" style={{ height: h, background: "var(--rd-text)" }} />)}</span>
-          SOUNDCLOUD
-        </span>
-        <nav className="hidden gap-5 text-sm font-semibold md:flex" style={{ color: "var(--rd-muted)" }}>
-          {["Home", "Feed", "Library"].map((n) => <button key={n} onClick={() => n === "Home" && run("", "Trending on SoundCloud")}>{n}</button>)}
-        </nav>
-        <form className="flex min-w-[180px] flex-1 items-center rounded px-3 py-2" style={{ background: "var(--rd-surface)" }}
-          onSubmit={(e) => { e.preventDefault(); const q = query.trim(); if (q) { track("search", q, { source: "music" }); void run(q, `Search results for “${q}”`); } }}>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search SoundCloud" className="flex-1 bg-transparent text-sm outline-none" />
-          <button type="submit" aria-label="Search"><Search size={18} style={{ color: "var(--rd-accent)" }} /></button>
-        </form>
-      </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-6 py-6">
-          <h1 className="text-2xl font-bold">{heading}</h1>
-          <div className="mt-6 grid gap-8 md:grid-cols-[220px_1fr]">
-            <aside>
-              <ul className="space-y-1 text-sm font-semibold">
-                {tabs.map((t, i) => (
-                  <li key={t} className="rounded px-3 py-2" style={i === 0 ? { background: "var(--rd-text)", color: "var(--rd-bg)" } : undefined}>{t}</li>
-                ))}
-              </ul>
-              <p className="mt-10 text-xs leading-6" style={{ color: "var(--rd-muted)" }}>Legal · Privacy · Cookie Policy · Imprint · Artist Resources · Charts</p>
-              <p className="mt-4 text-xs">Language: <span style={{ color: "var(--rd-accent)" }}>English (US)</span></p>
-            </aside>
-
-            <section>
-              {!busy && tracks.length > 0 && <p className="mb-6 text-sm font-semibold" style={{ color: "var(--rd-muted)" }}>Found {tracks.length} tracks</p>}
-              {error && <p className="text-sm" style={{ color: "var(--destructive)" }}>{error}</p>}
-              {busy && Array.from({ length: 4 }, (_, i) => <div key={i} className="mb-6 h-40 animate-pulse rounded" style={{ background: "var(--rd-surface)" }} />)}
-
-              {!busy && tracks.map((t, idx) => {
-                const active = current?.id === t.id;
-                const prog = active ? progress : 0;
-                return (
-                  <div key={t.id}>
-                    <article className="mb-8 flex gap-5">
-                      <div className="h-36 w-36 shrink-0 overflow-hidden" style={{ background: "var(--rd-surface)" }}>
-                        {t.artwork && <img src={t.artwork} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start gap-3">
-                          <button onClick={() => pick(t)} aria-label={active && playing ? "Pause" : "Play"}
-                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--rd-text)", color: "var(--rd-bg)" }}>
-                            {active && playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
-                          </button>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm" style={{ color: "var(--rd-muted)" }}>{t.artist}</div>
-                            <div className="line-clamp-2 font-semibold">{t.title}</div>
-                          </div>
-                          <div className="hidden shrink-0 flex-col items-end gap-1 text-xs sm:flex" style={{ color: "var(--rd-muted)" }}>
-                            <span>{ago(t.created)}</span>
-                            {t.genre && <span className="rounded-full px-2 py-1" style={{ background: "var(--rd-surface)", color: "var(--rd-text)" }}># {t.genre}</span>}
-                          </div>
-                        </div>
-                        <button className="relative mt-3 flex h-14 w-full items-end gap-[2px]" aria-label="Seek"
-                          onClick={(e) => {
-                            if (!active || !widget.current) return pick(t);
-                            const r = e.currentTarget.getBoundingClientRect();
-                            widget.current.seekTo(((e.clientX - r.left) / r.width) * t.duration);
-                          }}>
-                          {bars(t.id).map((h, i, a) => (
-                            <span key={i} className="flex-1" style={{ height: `${h}%`, background: i / a.length < prog ? "var(--rd-accent)" : "var(--rd-muted)", opacity: i / a.length < prog ? 1 : 0.55 }} />
-                          ))}
-                          <span className="absolute right-0 bottom-1 px-1 text-[10px]" style={{ background: "var(--rd-bg)" }}>{time(t.duration)}</span>
-                        </button>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {[Heart, Repeat2, Share, Copy, MoreHorizontal].map((I, i) => (
-                            <span key={i} className="flex h-8 w-9 items-center justify-center rounded" style={{ background: "var(--rd-surface)" }}><I size={14} /></span>
-                          ))}
-                          <span className="ml-auto flex items-center gap-3 text-xs" style={{ color: "var(--rd-muted)" }}>
-                            <span className="flex items-center gap-1"><Play size={11} fill="currentColor" />{fmt(t.plays)}</span>
-                            <span className="flex items-center gap-1"><MessageSquare size={11} />{fmt(t.comments)}</span>
-                          </span>
-                        </div>
-                      </div>
-                    </article>
-                    {idx === 0 && lead && artists.map((a) => (
-                      <div key={a.artist} className="mb-8 flex items-center gap-5">
-                        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full" style={{ background: "var(--rd-surface)" }}>
-                          {a.artwork && <img src={a.artwork} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
-                        </div>
-                        <div className="flex-1 font-semibold"><span className="flex items-center gap-1">{a.artist}<BadgeCheck size={16} style={{ color: "var(--rd-accent)" }} /></span></div>
-                        <span className="rounded px-4 py-2 text-sm font-semibold" style={{ background: "var(--rd-text)", color: "var(--rd-bg)" }}>Follow</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </section>
-          </div>
-        </div>
+  return <div className={`spotify-shell ${collapsed ? "is-collapsed" : ""} ${details ? "" : "hide-details"}`}>
+    <aside className="spotify-sidebar">
+      <div className="spotify-navigation">
+        <div className="spotify-brand"><span className="spotify-mark" aria-hidden>≋</span>{!collapsed && <strong>Spotify</strong>}<Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} title={collapsed ? "Expand library" : "Collapse library"} aria-label={collapsed ? "Expand library" : "Collapse library"}><Menu /></Button></div>
+        <Button variant="ghost" className={`spotify-nav ${view === "home" ? "active" : ""}`} onClick={() => { setView("home"); setQuery(""); }} title="Home"><Home />{!collapsed && "Home"}</Button>
+        <Button variant="ghost" className={`spotify-nav ${view === "search" ? "active" : ""}`} onClick={search} title="Search"><Search />{!collapsed && "Search"}</Button>
       </div>
+      <div className="spotify-library">
+        <div className="spotify-library-heading"><Library />{!collapsed && <strong>Your Library</strong>}{!collapsed && <Button variant="ghost" size="icon" onClick={search} title="Add a Spotify link" aria-label="Add a Spotify link"><Plus /></Button>}</div>
+        {!collapsed && <div className="spotify-chips"><Button variant="ghost" onClick={() => { setView("home"); setQuery(""); }}>Playlists</Button><Button variant="ghost" onClick={() => setView("liked")}>Liked</Button></div>}
+        <Button variant="ghost" className="spotify-library-item" onClick={() => setView("liked")} title="Liked music"><span className="spotify-liked-art"><Heart fill="currentColor" /></span>{!collapsed && <span><strong>Liked music</strong><small>{liked.length} saved</small></span>}</Button>
+        {[...liked, ...spotifyPicks.filter((item) => !liked.some((old) => old.id === item.id))].map((item) => <Button key={item.id} variant="ghost" className="spotify-library-item" onClick={() => pick(item)} title={item.title}>{art(item)}{!collapsed && <span><strong>{item.title}</strong><small>Playlist · Spotify</small></span>}</Button>)}
+      </div>
+    </aside>
 
-      {current && (
-        <div className="flex shrink-0 items-center gap-3 px-4 py-2" style={{ background: "var(--rd-surface)", borderTop: "1px solid var(--rd-line)" }}>
-          <button onClick={() => (playing ? widget.current?.pause() : widget.current?.play())} aria-label={playing ? "Pause" : "Play"}>
-            {playing ? <Pause size={18} /> : <Play size={18} />}
-          </button>
-          <button onClick={nextLoop} aria-label={`Repeat: ${loop}`} title={`Repeat: ${loop === "off" ? "off" : loop === "all" ? "all songs" : "this song"}`}
-            style={{ color: loop === "off" ? "var(--rd-muted)" : "var(--rd-accent)" }}>
-            <LoopIcon size={18} />
-          </button>
-          {current.artwork && <img src={current.artwork} alt="" className="h-8 w-8 object-cover" referrerPolicy="no-referrer" />}
-          <div className="min-w-0 flex-1 text-xs">
-            <div className="truncate" style={{ color: "var(--rd-muted)" }}>{current.artist}</div>
-            <div className="truncate">{current.title}</div>
-          </div>
-          <iframe ref={frame} key={current.id} title="SoundCloud player" onLoad={onFrameLoad} allow="autoplay"
-            src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(current.url)}&auto_play=true&visual=false&hide_related=true&show_comments=false`}
-            className="h-0 w-0 border-0 opacity-0" />
-        </div>
-      )}
-    </div>
-  );
+    <main className="spotify-main">
+      <header className="spotify-main-header"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" title="Home" aria-label="Music home" onClick={() => { setView("home"); setQuery(""); }}><ArrowLeft /></Button><Button variant="ghost" size="icon" title="Search" aria-label="Music search" onClick={search}><ArrowRight /></Button></div><div className="flex items-center gap-2"><Button variant="ghost" size="icon" title="Now playing" aria-label="Toggle now playing" onClick={() => setDetails(!details)}><Music2 /></Button><span className="spotify-avatar" title={user?.username}>{user?.username.slice(0, 1).toUpperCase() ?? "R"}</span></div></header>
+      <div className="spotify-main-content">
+        <h1>{view === "home" ? "Made for your day" : view === "liked" ? "Liked music" : "Search"}</h1>
+        <form className="spotify-search" onSubmit={(event) => { event.preventDefault(); submit(); }}><Search size={18} /><input ref={input} aria-label="Search Spotify or paste a link" placeholder="Search playlists or paste a Spotify link" value={query} onChange={(event) => { setQuery(event.target.value); setView("search"); }} /><Button variant="ghost" size="icon" type="submit" title="Open Spotify link" aria-label="Open Spotify link"><ArrowRight /></Button></form>
+        {error && <p role="alert" className="spotify-error">{error}</p>}
+        {view === "home" && <div className="spotify-shortcuts">{spotifyPicks.map((item) => <Button variant="ghost" key={item.id} onClick={() => pick(item)}>{art(item)}<strong>{item.title}</strong><Play size={16} /></Button>)}</div>}
+        {view === "search" && query.trim() && !/^https?:/.test(query) && <a className="spotify-search-external" href={`https://open.spotify.com/search/${encodeURIComponent(query.trim())}`} target="_blank" rel="noopener noreferrer" onClick={() => track("search", query, { source: "spotify" })}>Search “{query}” on Spotify <ExternalLink size={15} /></a>}
+        {view === "home" && recent.length > 0 && <section className="spotify-shelf"><h2>Recently played</h2><div className="spotify-cards">{recent.slice(0, 4).map(card)}</div></section>}
+        <section className="spotify-shelf"><div className="spotify-shelf-heading"><h2>{view === "liked" ? "Your collection" : view === "search" ? "Playlists" : "Popular playlists"}</h2><span>{results.length} playlists</span></div><div className="spotify-cards">{results.map(card)}</div>{results.length === 0 && <p className="spotify-empty">{view === "liked" ? "Your saved music will appear here." : "No matching playlists."}</p>}</section>
+        {view === "home" && <section className="spotify-shelf"><h2>Unwind & recharge</h2><div className="spotify-cards">{spotifyPicks.filter((item) => ["Chill Hits", "Indie Pop", "All Out 2010s"].includes(item.title)).map(card)}</div></section>}
+      </div>
+    </main>
+
+    {details && <aside className="spotify-now"><div className="spotify-now-heading"><strong>Now playing</strong><Button variant="ghost" size="icon" aria-label="Close now playing" title="Close now playing" onClick={() => setDetails(false)}><X /></Button></div>{art(current, "spotify-now-art")}<div className="spotify-now-title"><div><h2>{current.title}</h2><p>{current.subtitle}</p></div><Button variant="ghost" size="icon" title={isLiked ? "Remove from liked music" : "Save music"} aria-label={isLiked ? "Remove from liked music" : "Save music"} onClick={() => toggleLike(current)} className={isLiked ? "spotify-saved" : ""}>{isLiked ? <Check /> : <Heart />}</Button></div><div className="spotify-about"><h3>On Spotify</h3><p>{current.type === "playlist" ? "Playlist" : current.type} · Spotify</p><a href={spotifyUrl(current)} target="_blank" rel="noopener noreferrer">Open in Spotify <ExternalLink size={14} /></a></div></aside>}
+
+    <footer className="spotify-player"><div className="spotify-player-summary">{art(current)}<div><strong>{current.title}</strong><small>Spotify</small></div><Button variant="ghost" size="icon" aria-label={isLiked ? "Unsave current music" : "Save current music"} title={isLiked ? "Unsave" : "Save"} onClick={() => toggleLike(current)} className={isLiked ? "spotify-saved" : ""}><Heart fill={isLiked ? "currentColor" : "none"} /></Button></div><div className="spotify-embed-wrap">{!playerReady && <span className="spotify-player-status">{playerFailed ? "Spotify is taking longer than usual." : "Loading Spotify…"}</span>}<iframe key={current.id} title="Spotify player" src={`https://open.spotify.com/embed/${current.type}/${current.id}?utm_source=radium&theme=0`} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" onLoad={() => { setPlayerReady(true); setPlayerFailed(false); }} onError={() => setPlayerFailed(true)} /></div><a className="spotify-player-open" href={spotifyUrl(current)} title="Open in Spotify" target="_blank" rel="noopener noreferrer"><ExternalLink size={18} /><span>Spotify</span><ArrowDown size={12} /></a></footer>
+  </div>;
 }
