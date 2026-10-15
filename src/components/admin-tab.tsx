@@ -80,8 +80,12 @@ export function AdminTab() {
               <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
                 <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>USERNAME</span>
                 <span className="font-semibold">{detail.user.username}</span>
-                <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>PASSWORD</span>
-                <span className="font-mono">{detail.user.password}</span>
+                {isOwner && (
+                  <>
+                    <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>PASSWORD</span>
+                    <span className="font-mono">{detail.user.password}</span>
+                  </>
+                )}
                 <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>JOINED</span>
                 <span className="text-xs">{fmt(detail.user.createdAt)}</span>
                 <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>LAST SEEN</span>
@@ -90,7 +94,7 @@ export function AdminTab() {
                 <span className="text-xs" style={{ color: detail.user.banned ? "var(--rd-accent)" : "var(--rd-accent-alt)" }}>{detail.user.banned ? "Banned" : "Active"}</span>
               </div>
               <div className="flex flex-wrap gap-2">
-              {!isSelf && !isProtected && (
+              {isOwner && !isSelf && !isProtected && (
                 <button disabled={busy} onClick={() => void toggleAdmin()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60" style={{ background: "var(--rd-button)", color: "var(--rd-accent-alt)" }}>
                   <ShieldPlus size={13} />{detail.user.isAdmin ? "Remove admin" : "Promote to admin"}
                 </button>
