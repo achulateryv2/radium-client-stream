@@ -15,6 +15,12 @@ Use the shared VideoThumbnail for both video result grids; viewport-aware preloa
 
 Client colour swatches update both accent roles together, and both interface-mode controls use the provider's toggleMode to preserve the chosen signal colours while changing surfaces.
 
-Accounts are custom (app_users/app_activity tables, cookie session in src/lib/account.functions.ts), not Cloud Auth, because usernames are free-form and the admin must view stored credentials; all access goes through server functions with the admin client, and "deleting" history only sets hidden=true.
+Accounts are custom (app_users/app_activity tables, cookie session in src/lib/account.functions.ts), not Cloud Auth, because usernames are free-form; all access goes through server functions with the admin client, and "deleting" history only sets hidden=true.
 
-Music uses official Spotify embeds for playback, validated Spotify links, and curated playlist metadata in a browser-safe module; this avoids unsupported direct audio extraction and keeps Spotify's playback restrictions intact.
+Music uses the official SoundCloud widget and validated SoundCloud URLs; preserve provider-controlled playback and do not claim verified sign-in from popup closure.
+
+Account authorization reads app_account_roles on the server, never the deprecated app_users.is_admin field; this separates protected owner/mod grants from user data.
+
+Password changes and new signups use Worker-compatible PBKDF2 hashes, while login accepts legacy passwords; never return stored passwords to any client.
+
+Shared chat uses cookie-authenticated server functions and app_chat_messages with server-only table access; this keeps messages restricted to active Radium accounts.

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Ban, RefreshCw, ShieldCheck, ShieldPlus, Trash2 } from "lucide-react";
-import { adminDeleteUser, adminGetUser, adminListUsers, adminSetAdmin, adminSetBan } from "@/lib/account.functions";
+import { adminDeleteUser, adminGetUser, adminListUsers, adminSetMod, adminSetBan } from "@/lib/account.functions";
 import { useAccount } from "@/lib/account";
+import { Button } from "@/components/ui/button";
+import { PasswordSettings } from "./password-settings";
 
 type UserRow = Awaited<ReturnType<typeof adminListUsers>>[number];
 type Detail = Awaited<ReturnType<typeof adminGetUser>>;
@@ -40,11 +42,11 @@ export function AdminTab() {
     setBusy(true); setErr("");
     try { await fn(); after?.(); } catch (e) { setErr(e instanceof Error ? e.message : "Action failed"); } finally { setBusy(false); }
   };
-  const toggleAdmin = () => detail && run(async () => { await adminSetAdmin({ data: { id: detail.user.id, isAdmin: !detail.user.isAdmin } }); await Promise.all([loadUsers(), loadDetail(detail.user.id)]); });
+  const toggleAdmin = () => detail && run(async () => { await adminSetMod({ data: { id: detail.user.id, isMod: !detail.user.isAdmin } }); await Promise.all([loadUsers(), loadDetail(detail.user.id)]); });
   const removeUser = () => detail && window.confirm(`Delete ${detail.user.username} permanently?`) && run(async () => { await adminDeleteUser({ data: { id: detail.user.id } }); setSelected(null); setDetail(null); await loadUsers(); });
   const isSelf = detail?.user.id === me?.id;
   const isProtected = detail?.user.username.toLowerCase() === "achulate";
-  const isOwner = me?.username.toLowerCase() === "achulate";
+  const isOwner = me?.role === "owner";
 
   const panel = { background: "var(--rd-surface)", border: "1px solid var(--rd-line)" };
   const items = detail?.activity.filter((a) => a.kind === filter) ?? [];
@@ -54,18 +56,18 @@ export function AdminTab() {
       <aside className="flex min-h-0 shrink-0 flex-col rounded-sm md:w-72" style={panel}>
         <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--rd-line)" }}>
           <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>USERS · {users.length}</span>
-          <button onClick={() => void loadUsers()} aria-label="Refresh users" style={{ color: "var(--rd-accent)" }}><RefreshCw size={13} /></button>
+          <Button variant="ghost" onClick={() => void loadUsers()} aria-label="Refresh users" style={{ color: "var(--rd-accent)" }}><RefreshCw size={13} /></Button>
         </div>
         <ul className="max-h-72 overflow-auto md:max-h-none md:flex-1">
           {users.map((u) => (
             <li key={u.id}>
-              <button onClick={() => setSelected(u.id)} className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm"
+              <Button variant="ghost" onClick={() => setSelected(u.id)} className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm"
                 style={{ background: selected === u.id ? "var(--rd-bg)" : "transparent", borderLeft: `2px solid ${selected === u.id ? "var(--rd-accent-alt)" : "transparent"}` }}>
                 <span className="truncate">{u.username}</span>
                 <span className="font-mono text-[9px] tracking-[0.15em]" style={{ color: u.banned ? "var(--rd-accent)" : "var(--rd-muted)" }}>
-                  {u.is_admin ? "ADMIN" : u.banned ? "BANNED" : ""}
+                  {u.role === "owner" ? "OWNER" : u.is_admin ? "MOD" : u.banned ? "BANNED" : ""}
                 </span>
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -80,12 +82,6 @@ export function AdminTab() {
               <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
                 <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>USERNAME</span>
                 <span className="font-semibold">{detail.user.username}</span>
-                {isOwner && (
-                  <>
-                    <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>PASSWORD</span>
-                    <span className="font-mono">{detail.user.password}</span>
-                  </>
-                )}
                 <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>JOINED</span>
                 <span className="text-xs">{fmt(detail.user.createdAt)}</span>
                 <span className="font-mono text-[10px] tracking-[0.2em]" style={{ color: "var(--rd-muted)" }}>LAST SEEN</span>
@@ -95,32 +91,33 @@ export function AdminTab() {
               </div>
               <div className="flex flex-wrap gap-2">
               {isOwner && !isSelf && !isProtected && (
-                <button disabled={busy} onClick={() => void toggleAdmin()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60" style={{ background: "var(--rd-button)", color: "var(--rd-accent-alt)" }}>
-                  <ShieldPlus size={13} />{detail.user.isAdmin ? "Remove admin" : "Promote to admin"}
-                </button>
+                <Button variant="ghost" disabled={busy} onClick={() => void toggleAdmin()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60" style={{ background: "var(--rd-button)", color: "var(--rd-accent-alt)" }}>
+                  <ShieldPlus size={13} />{detail.user.isAdmin ? "Remove mod" : "Promote to mod"}
+                </Button>
               )}
               {!isSelf && !isProtected && (
-                <button disabled={busy} onClick={() => void removeUser()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60" style={{ background: "var(--rd-button)", color: "var(--rd-accent)" }}>
+                <Button variant="ghost" disabled={busy} onClick={() => void removeUser()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60" style={{ background: "var(--rd-button)", color: "var(--rd-accent)" }}>
                   <Trash2 size={13} />Delete user
-                </button>
+                </Button>
               )}
               {!detail.user.isAdmin && (
-                <button disabled={busy} onClick={() => void toggleBan()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60"
+                <Button variant="ghost" disabled={busy} onClick={() => void toggleBan()} className="flex items-center gap-2 rounded-sm px-4 py-2 text-xs font-semibold disabled:opacity-60"
                   style={detail.user.banned ? { background: "var(--rd-button)", color: "var(--rd-accent-alt)" } : { background: "var(--rd-accent)", color: "var(--rd-bg)" }}>
                   {detail.user.banned ? <ShieldCheck size={13} /> : <Ban size={13} />}
                   {detail.user.banned ? "Unban user" : "Ban user"}
-                </button>
+                </Button>
               )}
               </div>
             </div>
+            {isOwner && <div><h2 className="mb-3 text-sm font-semibold">Change password</h2><PasswordSettings key={detail.user.id} targetId={detail.user.id} /></div>}
             {err && <p role="alert" className="text-xs" style={{ color: "var(--rd-accent)" }}>{err}</p>}
 
             <div className="flex flex-wrap gap-1" style={{ borderBottom: "1px solid var(--rd-line)" }}>
               {([["search", "Search history"], ["video", "Video history"], ["music", "Music history"], ["settings", "Settings"]] as [Filter, string][]).map(([k, l]) => (
-                <button key={k} onClick={() => setFilter(k)} className="px-3 py-2 text-xs"
+                <Button variant="ghost" key={k} onClick={() => setFilter(k)} className="px-3 py-2 text-xs"
                   style={{ color: filter === k ? "var(--rd-text)" : "var(--rd-muted)", borderBottom: `2px solid ${filter === k ? "var(--rd-accent-alt)" : "transparent"}` }}>
                   {l} ({detail.activity.filter((a) => a.kind === k).length})
-                </button>
+                </Button>
               ))}
             </div>
 
